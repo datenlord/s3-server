@@ -10,4 +10,19 @@ description = "S3 service implementation for datenlord"
 keywords = ["s3"]
 categories = ["web"]
 
+[features]
+default = []
+rt-async-std = ["async-std", "tokio"]
+
 [dependencies]
+async-std = { version = "1.6.2", optional = true }
+tokio = { version = "0.2.22", optional = true }
+hyper = "0.13.7"
+futures = "0.3.5"
+anyhow = "1.0.32"
+
+[dev-dependencies]
+datenlord_s3 = { path = ".", features = ["rt-async-std"] }
+tokio = { version = "0.2.22", features = ["full"] }
+async-std = { version = "1.6.2", features = ["tokio02", "attributes"] }
+futures-timer = "3.0.2"
