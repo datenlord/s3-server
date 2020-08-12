@@ -32,10 +32,11 @@
     // Some explicitly allowed Clippy lints, must have clear reason to allow
     clippy::implicit_return, // actually omitting the return keyword is idiomatic Rust code
     clippy::missing_inline_in_public_items, // In general, it is not bad
-    clippy::must_use_candidate, // It's not bad at all
-    clippy::expect_used, // Tests may use `expect`
-    clippy::panic, // Panic when fatal failures occur
+    clippy::module_name_repetitions, // Allowed by default
 )]
+#![cfg_attr(test, allow(
+    clippy::panic, // Panic when fatal failures occur
+))]
 #![allow(
     // TODO: Deny lints below
     missing_docs,
@@ -46,5 +47,4 @@
 )]
 
 pub mod compat;
-
 mod s3_path;
