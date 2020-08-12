@@ -47,4 +47,5 @@
 )]
 
 pub mod compat;
+pub mod error;
 mod s3_path;
