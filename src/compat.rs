@@ -26,6 +26,7 @@ mod with_async_std {
     }
 
     #[derive(Debug)]
+    #[must_use]
     pub struct AsyncStdListener {
         listener: TcpListener,
     }
