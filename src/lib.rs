@@ -48,4 +48,6 @@
 
 pub mod compat;
 pub mod error;
+pub mod storage;
+
 mod s3_path;
