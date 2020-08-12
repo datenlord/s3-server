@@ -46,3 +46,5 @@
 )]
 
 pub mod compat;
+
+mod s3_path;
