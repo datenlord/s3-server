@@ -23,6 +23,7 @@ anyhow = "1.0.32"
 thiserror = "1.0.20"
 rusoto_core = "0.45.0"
 rusoto_s3 = "0.45.0"
+async-trait = "0.1.36"
 
 [dev-dependencies]
 datenlord_s3 = { path = ".", features = ["rt-async-std"] }
