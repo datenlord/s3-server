@@ -50,6 +50,7 @@ pub mod compat;
 pub mod error;
 pub mod storage;
 
+mod s3_output;
 mod s3_path;
 mod s3_service;
 

@@ -25,6 +25,8 @@ rusoto_core = "0.45.0"
 rusoto_s3 = "0.45.0"
 async-trait = "0.1.36"
 log = "0.4.11"
+xml-rs = "0.8.3"
+mime = "0.3.16"
 
 [dev-dependencies]
 datenlord_s3 = { path = ".", features = ["rt-async-std"] }
