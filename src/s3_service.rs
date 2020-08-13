@@ -1,5 +1,5 @@
 use crate::error::S3Error;
-use crate::storage::S3Storage;
+use crate::s3_storage::S3Storage;
 
 use futures::future::BoxFuture;
 use hyper::Method;

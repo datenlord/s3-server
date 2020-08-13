@@ -9,10 +9,6 @@ use rusoto_s3::{
     ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
 };
 
-type HeadBucketOutput = ();
-type DeleteBucketOutput = ();
-type ListBucketRequest = ();
-
 #[async_trait]
 pub trait S3Storage {
     async fn get_object(
@@ -37,15 +33,9 @@ pub trait S3Storage {
     async fn delete_bucket(
         &self,
         input: DeleteBucketRequest,
-    ) -> Result<DeleteBucketOutput, S3Error<DeleteBucketError>>;
+    ) -> Result<(), S3Error<DeleteBucketError>>;
 
-    async fn head_bucket(
-        &self,
-        input: HeadBucketRequest,
-    ) -> Result<HeadBucketOutput, S3Error<HeadBucketError>>;
+    async fn head_bucket(&self, input: HeadBucketRequest) -> Result<(), S3Error<HeadBucketError>>;
 
-    async fn list_buckets(
-        &self,
-        input: ListBucketRequest,
-    ) -> Result<ListBucketsOutput, S3Error<ListBucketsError>>;
+    async fn list_buckets(&self) -> Result<ListBucketsOutput, S3Error<ListBucketsError>>;
 }

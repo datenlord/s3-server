@@ -13,6 +13,7 @@ categories = ["web"]
 [features]
 default = []
 rt-async-std = ["async-std", "tokio"]
+rt-tokio = ["tokio"]
 
 [dependencies]
 async-std = { version = "1.6.2", optional = true }
