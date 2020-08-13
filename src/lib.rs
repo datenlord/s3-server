@@ -46,12 +46,17 @@
     clippy::multiple_crate_versions
 )]
 
-pub mod compat;
-pub mod error;
-pub mod storage;
+#[macro_use]
+mod macros;
 
 mod s3_output;
 mod s3_path;
 mod s3_service;
+mod s3_storage;
+
+pub mod compat;
+pub mod error;
+pub mod fs;
 
 pub use s3_service::S3Service;
+pub use s3_storage::S3Storage;
