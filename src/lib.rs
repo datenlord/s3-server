@@ -49,6 +49,7 @@
 #[macro_use]
 mod macros;
 
+mod byte_stream;
 mod s3_output;
 mod s3_path;
 mod s3_service;
