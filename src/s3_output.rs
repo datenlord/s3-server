@@ -1,30 +1,41 @@
 use crate::error::{InvalidOutputError, S3Error, S3Result};
+use crate::utils::Response;
+
+use std::convert::TryFrom;
 
 use hyper::{
     header::{self, HeaderValue},
-    Body,
+    Body, StatusCode,
 };
-use rusoto_s3::{
-    CreateBucketOutput, DeleteObjectOutput, GetBucketLocationOutput, GetObjectOutput,
-    ListBucketsOutput, PutObjectOutput,
-};
-use std::convert::TryFrom;
 use xml::{
     common::XmlVersion,
     writer::{EventWriter, XmlEvent},
 };
 
-type Response = hyper::Response<Body>;
+use rusoto_s3::{
+    CreateBucketOutput, DeleteObjectOutput, GetBucketLocationOutput, GetObjectOutput,
+    HeadBucketError, ListBucketsOutput, PutObjectOutput,
+};
 
 pub(super) trait S3Output {
     fn try_into_response(self) -> S3Result<Response>;
 }
 
-impl<T: S3Output> S3Output for S3Result<T> {
+impl<T, E> S3Output for S3Result<T, E>
+where
+    T: S3Output,
+    E: S3Output,
+{
     fn try_into_response(self) -> S3Result<Response> {
         match self {
             Ok(output) => output.try_into_response(),
-            Err(e) => Err(e),
+            Err(err) => match err {
+                S3Error::Operation(e) => e.try_into_response(),
+                S3Error::InvalidRequest(e) => Err(<S3Error>::InvalidRequest(e)),
+                S3Error::InvalidOutput(e) => Err(<S3Error>::InvalidOutput(e)),
+                S3Error::Storage(e) => Err(<S3Error>::Storage(e)),
+                S3Error::NotSupported => Err(S3Error::NotSupported),
+            },
         }
     }
 }
@@ -182,5 +193,18 @@ impl S3Output for GetBucketLocationOutput {
 
             Ok(res)
         })
+    }
+}
+
+impl S3Output for HeadBucketError {
+    fn try_into_response(self) -> S3Result<Response> {
+        let mut res = Response::new(Body::empty());
+        match self {
+            Self::NoSuchBucket(msg) => {
+                *res.body_mut() = Body::from(msg);
+                *res.status_mut() = StatusCode::NOT_FOUND;
+            }
+        }
+        Ok(res)
     }
 }

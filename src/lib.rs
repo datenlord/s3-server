@@ -54,6 +54,7 @@ mod s3_output;
 mod s3_path;
 mod s3_service;
 mod s3_storage;
+mod utils;
 
 pub mod compat;
 pub mod error;

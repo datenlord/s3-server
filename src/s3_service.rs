@@ -1,15 +1,11 @@
 use crate::error::S3Error;
 use crate::s3_storage::S3Storage;
+use crate::utils::{BoxStdError, Request, Response, StdResult};
 
 use futures::future::BoxFuture;
 use hyper::Method;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-
-type Request = hyper::Request<hyper::Body>;
-type Response = hyper::Response<hyper::Body>;
-type BoxStdError = Box<dyn std::error::Error + Send + Sync + 'static>;
-type StdResult<T> = Result<T, BoxStdError>;
 
 #[derive(Debug)]
 pub struct S3Service<T> {

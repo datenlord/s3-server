@@ -1,7 +1,7 @@
+use crate::utils::BoxStdError;
+
 use std::error::Error;
 use std::fmt::{self, Display};
-
-type BoxStdError = Box<dyn Error + Send + Sync + 'static>;
 
 // TODO: switch to thiserror, see https://github.com/dtolnay/thiserror/issues/79
 
@@ -10,8 +10,9 @@ pub type S3Result<T, E = NopError> = Result<T, S3Error<E>>;
 #[derive(Debug)]
 pub enum S3Error<E = NopError> {
     Operation(E),
-    InvalidRequest(BoxStdError),
+    InvalidRequest(BoxStdError), // TODO: switch to a specific error type
     InvalidOutput(InvalidOutputError),
+    Storage(BoxStdError),
     NotSupported,
 }
 
@@ -44,6 +45,7 @@ impl<E: Display> Display for S3Error<E> {
             Self::Operation(e) => write!(f, "Operation: {}", e),
             Self::InvalidRequest(e) => write!(f, "Invalid request: {}", e),
             Self::InvalidOutput(e) => write!(f, "Invalid output: {}", e),
+            Self::Storage(e) => write!(f, "Storage: {}", e),
             Self::NotSupported => write!(f, "Not supported"),
         }
     }
@@ -55,6 +57,7 @@ impl<E: Error + 'static> Error for S3Error<E> {
             Self::Operation(e) => Some(e),
             Self::InvalidRequest(e) => Some(e.as_ref()),
             Self::InvalidOutput(e) => Some(e),
+            Self::Storage(err) => Some(err.as_ref()),
             Self::NotSupported => None,
         }
     }
