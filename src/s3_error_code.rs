@@ -97,7 +97,7 @@ impl Display for S3ErrorCode {
 impl S3ErrorCode {
     #[allow(dead_code)] // TODO: remove it
     #[allow(clippy::match_same_arms)]
-    pub(super) fn get_status_code(self) -> Option<StatusCode> {
+    pub(super) fn as_status_code(self) -> Option<StatusCode> {
         match self {
             Self::AccessDenied => Some(StatusCode::FORBIDDEN),
             Self::AccountProblem => Some(StatusCode::FORBIDDEN),
