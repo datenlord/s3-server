@@ -106,7 +106,7 @@ where
                 // list buckets
                 self.inner.list_buckets().await.try_into_response()
             }
-            S3Path::Bucket { bucket } => todo!(),
+            S3Path::Bucket { bucket } => Err(<S3Error>::NotSupported), // TODO: impl handler
             S3Path::Object { bucket, key } => {
                 let input = GetObjectRequest {
                     bucket: bucket.into(),
@@ -120,16 +120,15 @@ where
     async fn handle_post(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
-            S3Path::Root => {}
-            S3Path::Bucket { bucket } => {}
-            S3Path::Object { bucket, key } => {}
+            S3Path::Root => Err(<S3Error>::NotSupported), // TODO: impl handler
+            S3Path::Bucket { bucket } => Err(<S3Error>::NotSupported), // TODO: impl handler
+            S3Path::Object { bucket, key } => Err(<S3Error>::NotSupported), // TODO: impl handler
         }
-        todo!()
     }
     async fn handle_put(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
-            S3Path::Root => todo!(),
+            S3Path::Root => Err(<S3Error>::NotSupported), // TODO: impl handler
             S3Path::Bucket { bucket } => {
                 let input: CreateBucketRequest = CreateBucketRequest {
                     bucket: bucket.into(),
@@ -163,7 +162,7 @@ where
     async fn handle_delete(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
-            S3Path::Root => todo!(),
+            S3Path::Root => Err(<S3Error>::NotSupported), // TODO: impl handler
             S3Path::Bucket { bucket } => {
                 let input: DeleteBucketRequest = DeleteBucketRequest {
                     bucket: bucket.into(),
@@ -184,7 +183,7 @@ where
     async fn handle_head(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
-            S3Path::Root => todo!(),
+            S3Path::Root => Err(<S3Error>::NotSupported), // TODO: impl handler
             S3Path::Bucket { bucket } => {
                 // head bucket
                 let input = HeadBucketRequest {
@@ -192,7 +191,7 @@ where
                 };
                 self.inner.head_bucket(input).await.try_into_response()
             }
-            S3Path::Object { bucket, key } => todo!(),
+            S3Path::Object { bucket, key } => Err(<S3Error>::NotSupported), // TODO: impl handler
         }
     }
 }
