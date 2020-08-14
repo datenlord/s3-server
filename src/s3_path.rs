@@ -38,29 +38,33 @@ impl<'a> S3Path<'a> {
     }
 }
 
-#[test]
-fn test_s3_path() {
-    assert!(matches!(S3Path::try_from_path("/"), Ok(S3Path::Root)));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn parse_s3_path() {
+        assert!(matches!(S3Path::try_from_path("/"), Ok(S3Path::Root)));
 
-    assert!(matches!(
-        S3Path::try_from_path("/bucket"),
-        Ok(S3Path::Bucket { bucket: "bucket" })
-    ));
+        assert!(matches!(
+            S3Path::try_from_path("/bucket"),
+            Ok(S3Path::Bucket { bucket: "bucket" })
+        ));
 
-    assert!(matches!(
-        S3Path::try_from_path("/bucket/"),
-        Ok(S3Path::Bucket { bucket: "bucket" })
-    ));
+        assert!(matches!(
+            S3Path::try_from_path("/bucket/"),
+            Ok(S3Path::Bucket { bucket: "bucket" })
+        ));
 
-    assert!(matches!(
-        S3Path::try_from_path("/bucket/dir/object"),
-        Ok(S3Path::Object {
-            bucket: "bucket",
-            key: "dir/object"
-        })
-    ));
+        assert!(matches!(
+            S3Path::try_from_path("/bucket/dir/object"),
+            Ok(S3Path::Object {
+                bucket: "bucket",
+                key: "dir/object"
+            })
+        ));
 
-    assert!(S3Path::try_from_path("asd").is_err());
+        assert!(S3Path::try_from_path("asd").is_err());
 
-    assert!(S3Path::try_from_path("a/").is_err());
+        assert!(S3Path::try_from_path("a/").is_err());
+    }
 }
