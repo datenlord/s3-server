@@ -10,7 +10,6 @@ use xml::writer::{events::XmlEvent, EventWriter};
 pub(super) type Request = hyper::Request<Body>;
 pub(super) type Response = hyper::Response<Body>;
 pub(super) type BoxStdError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub(super) type StdResult<T> = Result<T, BoxStdError>;
 
 pub(super) fn xml_write_string_element<W: io::Write>(
     w: &mut EventWriter<W>,
