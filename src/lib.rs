@@ -62,5 +62,6 @@ pub mod compat;
 pub mod error;
 pub mod fs;
 
+pub use s3_path::{ParseS3PathError, S3Path};
 pub use s3_service::S3Service;
 pub use s3_storage::S3Storage;
