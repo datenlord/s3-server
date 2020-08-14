@@ -85,7 +85,6 @@ impl S3Output for CreateBucketOutput {
 
 impl S3Output for PutObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        dbg!(self);
         let res = Response::new(Body::empty());
         // TODO: handle other fields
         Ok(res)
@@ -101,7 +100,6 @@ impl S3Output for () {
 
 impl S3Output for DeleteObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        dbg!(self);
         let res = Response::new(Body::empty());
         // TODO: handle other fields
         Ok(res)
@@ -219,6 +217,8 @@ impl S3Output for XmlErrorResponse {
                 standalone: None,
             })?;
 
+            w.write(XmlEvent::start_element("Error"))?;
+
             xml_write_string_element(&mut w, "Code", &self.code.to_string())?;
             if let Some(message) = self.message {
                 xml_write_string_element(&mut w, "Message", &message)?;
@@ -229,6 +229,8 @@ impl S3Output for XmlErrorResponse {
             if let Some(request_id) = self.request_id {
                 xml_write_string_element(&mut w, "RequestId", &request_id)?;
             }
+
+            w.write(XmlEvent::end_element())?;
 
             let status = self
                 .code
