@@ -29,7 +29,7 @@ impl<T: S3Output> S3Output for S3Result<T> {
     }
 }
 
-fn warp_output(f: impl FnOnce() -> Result<Response, InvalidOutputError>) -> S3Result<Response> {
+fn wrap_output(f: impl FnOnce() -> Result<Response, InvalidOutputError>) -> S3Result<Response> {
     match f() {
         Ok(res) => Ok(res),
         Err(e) => Err(<S3Error>::InvalidOutput(e)),
@@ -38,7 +38,7 @@ fn warp_output(f: impl FnOnce() -> Result<Response, InvalidOutputError>) -> S3Re
 
 impl S3Output for GetObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        warp_output(|| {
+        wrap_output(|| {
             let mut res = Response::new(Body::empty());
             if let Some(body) = self.body {
                 *res.body_mut() = Body::wrap_stream(body);
@@ -59,7 +59,7 @@ impl S3Output for GetObjectOutput {
 
 impl S3Output for CreateBucketOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        warp_output(|| {
+        wrap_output(|| {
             let mut res = Response::new(Body::empty());
             if let Some(location) = self.location {
                 let val = HeaderValue::try_from(location)?;
@@ -97,7 +97,7 @@ impl S3Output for DeleteObjectOutput {
 
 impl S3Output for ListBucketsOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        warp_output(|| {
+        wrap_output(|| {
             let mut body = Vec::with_capacity(4096);
             {
                 let mut w = EventWriter::new(&mut body);
@@ -161,7 +161,7 @@ impl S3Output for ListBucketsOutput {
 
 impl S3Output for GetBucketLocationOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        warp_output(|| {
+        wrap_output(|| {
             let mut body = Vec::with_capacity(64);
             let mut w = EventWriter::new(&mut body);
             w.write(XmlEvent::StartDocument {
