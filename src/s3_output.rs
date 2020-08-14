@@ -230,8 +230,14 @@ impl S3Output for XmlErrorResponse {
                 xml_write_string_element(&mut w, "RequestId", &request_id)?;
             }
 
-            let mut res = Response::new(Body::from(body));
+            let status = self
+                .code
+                .as_status_code()
+                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+            let mut res = create_response(body, Some(status));
             set_mime(&mut res, &mime::TEXT_XML)?;
+
             Ok(res)
         })
     }
