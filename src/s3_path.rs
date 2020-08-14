@@ -1,20 +1,19 @@
-#[allow(dead_code)] // TODO: remove it
 #[derive(Debug)]
-pub(super) enum S3Path<'a> {
+pub enum S3Path<'a> {
     Root,
     Bucket { bucket: &'a str },
     Object { bucket: &'a str, key: &'a str },
 }
 
+#[allow(missing_copy_implementations)]
 #[derive(Debug, thiserror::Error)]
 #[error("ParseS3PathError")]
-pub(super) struct ParseS3PathError {
+pub struct ParseS3PathError {
     _priv: (),
 }
 
 impl<'a> S3Path<'a> {
-    #[allow(dead_code)] // TODO: remove it
-    pub(super) fn from_path(path: &'a str) -> Result<Self, ParseS3PathError> {
+    pub fn try_from_path(path: &'a str) -> Result<Self, ParseS3PathError> {
         if !path.starts_with('/') {
             return Err(ParseS3PathError { _priv: () });
         }
@@ -41,27 +40,27 @@ impl<'a> S3Path<'a> {
 
 #[test]
 fn test_s3_path() {
-    assert!(matches!(S3Path::from_path("/"), Ok(S3Path::Root)));
+    assert!(matches!(S3Path::try_from_path("/"), Ok(S3Path::Root)));
 
     assert!(matches!(
-        S3Path::from_path("/bucket"),
+        S3Path::try_from_path("/bucket"),
         Ok(S3Path::Bucket { bucket: "bucket" })
     ));
 
     assert!(matches!(
-        S3Path::from_path("/bucket/"),
+        S3Path::try_from_path("/bucket/"),
         Ok(S3Path::Bucket { bucket: "bucket" })
     ));
 
     assert!(matches!(
-        S3Path::from_path("/bucket/dir/object"),
+        S3Path::try_from_path("/bucket/dir/object"),
         Ok(S3Path::Object {
             bucket: "bucket",
             key: "dir/object"
         })
     ));
 
-    assert!(S3Path::from_path("asd").is_err());
+    assert!(S3Path::try_from_path("asd").is_err());
 
-    assert!(S3Path::from_path("a/").is_err());
+    assert!(S3Path::try_from_path("a/").is_err());
 }
