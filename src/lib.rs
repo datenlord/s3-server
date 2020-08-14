@@ -50,11 +50,13 @@
 mod macros;
 
 mod byte_stream;
+mod utils;
+
+mod s3_error_code;
 mod s3_output;
 mod s3_path;
 mod s3_service;
 mod s3_storage;
-mod utils;
 
 pub mod compat;
 pub mod error;
