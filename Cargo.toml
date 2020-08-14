@@ -20,7 +20,6 @@ async-std = { version = "1.6.2", optional = true }
 tokio = { version = "0.2.22", optional = true }
 hyper = "0.13.7"
 futures = "0.3.5"
-anyhow = "1.0.32"
 thiserror = "1.0.20"
 rusoto_core = "0.45.0"
 rusoto_s3 = "0.45.0"
@@ -33,7 +32,10 @@ pin-project-lite = "0.1.7"
 path-absolutize = "3.0.6"
 
 [dev-dependencies]
-datenlord_s3 = { path = ".", features = ["rt-async-std"] }
+datenlord_s3 = { path = ".", features = ["rt-async-std", "rt-tokio"] }
 tokio = { version = "0.2.22", features = ["full"] }
 async-std = { version = "1.6.2", features = ["tokio02", "attributes"] }
 futures-timer = "3.0.2"
+anyhow = "1.0.32"
+env_logger = "0.7.1"
+structopt = "0.3.16"
