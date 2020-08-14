@@ -69,7 +69,15 @@ impl S3Storage for FileSystem {
     ) -> S3Result<GetObjectOutput, GetObjectError> {
         wrap_storage(async move {
             let path = self.get_object_path(&input.bucket, &input.key)?;
-            let file = File::open(&path).await?;
+            let file = match File::open(&path).await {
+                Ok(file) => file,
+                Err(e) => {
+                    log::error!("{}", e);
+                    return Ok(Err(GetObjectError::NoSuchKey(
+                        "The specified key does not exist.".into(),
+                    )));
+                }
+            };
             let content_length = file.metadata().await?.len();
             let stream = ByteStream::new(file, 4096);
 
@@ -123,6 +131,16 @@ impl S3Storage for FileSystem {
     ) -> S3Result<CreateBucketOutput, CreateBucketError> {
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
+            if path.exists() {
+                return Ok(Err(CreateBucketError::BucketAlreadyExists(
+                    concat!(
+                        "The requested bucket name is not available. ",
+                        "The bucket namespace is shared by all users of the system. ",
+                        "Please select a different name and try again."
+                    )
+                    .into(),
+                )));
+            }
 
             tokio::fs::create_dir(&path).await?;
 
@@ -146,7 +164,9 @@ impl S3Storage for FileSystem {
             let ans = if path.exists() {
                 Ok(())
             } else {
-                Err(HeadBucketError::NoSuchBucket(input.bucket))
+                Err(HeadBucketError::NoSuchBucket(
+                    "The specified bucket does not exist.".into(),
+                ))
             };
             Ok(ans)
         })
