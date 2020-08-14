@@ -1,5 +1,5 @@
 use crate::byte_stream::ByteStream;
-use crate::error::S3Error;
+use crate::error::{S3Error, S3Result};
 use crate::s3_storage::S3Storage;
 use crate::utils::BoxStdError;
 
@@ -50,7 +50,7 @@ impl FileSystem {
     }
 }
 
-async fn wrap_storage<T, E, Fut>(f: Fut) -> Result<T, S3Error<E>>
+async fn wrap_storage<T, E, Fut>(f: Fut) -> S3Result<T, E>
 where
     Fut: Future<Output = Result<Result<T, E>, BoxStdError>> + Send,
 {
@@ -66,7 +66,7 @@ impl S3Storage for FileSystem {
     async fn get_object(
         &self,
         input: GetObjectRequest,
-    ) -> Result<GetObjectOutput, S3Error<GetObjectError>> {
+    ) -> S3Result<GetObjectOutput, GetObjectError> {
         wrap_storage(async move {
             let path = self.get_object_path(&input.bucket, &input.key)?;
             let file = File::open(&path).await?;
@@ -86,7 +86,7 @@ impl S3Storage for FileSystem {
     async fn put_object(
         &self,
         input: PutObjectRequest,
-    ) -> Result<PutObjectOutput, S3Error<PutObjectError>> {
+    ) -> S3Result<PutObjectOutput, PutObjectError> {
         wrap_storage(async move {
             let path = self.get_object_path(&input.bucket, &input.key)?;
 
@@ -106,7 +106,7 @@ impl S3Storage for FileSystem {
     async fn delete_object(
         &self,
         input: DeleteObjectRequest,
-    ) -> Result<DeleteObjectOutput, S3Error<DeleteObjectError>> {
+    ) -> S3Result<DeleteObjectOutput, DeleteObjectError> {
         wrap_storage(async move {
             let path = self.get_object_path(&input.bucket, &input.key)?;
 
@@ -120,7 +120,7 @@ impl S3Storage for FileSystem {
     async fn create_bucket(
         &self,
         input: CreateBucketRequest,
-    ) -> Result<CreateBucketOutput, S3Error<CreateBucketError>> {
+    ) -> S3Result<CreateBucketOutput, CreateBucketError> {
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
 
@@ -131,10 +131,7 @@ impl S3Storage for FileSystem {
         })
         .await
     }
-    async fn delete_bucket(
-        &self,
-        input: DeleteBucketRequest,
-    ) -> Result<(), S3Error<DeleteBucketError>> {
+    async fn delete_bucket(&self, input: DeleteBucketRequest) -> S3Result<(), DeleteBucketError> {
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
             tokio::fs::remove_dir_all(path).await?;
@@ -143,7 +140,7 @@ impl S3Storage for FileSystem {
         .await
     }
 
-    async fn head_bucket(&self, input: HeadBucketRequest) -> Result<(), S3Error<HeadBucketError>> {
+    async fn head_bucket(&self, input: HeadBucketRequest) -> S3Result<(), HeadBucketError> {
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
             let ans = if path.exists() {
@@ -155,7 +152,7 @@ impl S3Storage for FileSystem {
         })
         .await
     }
-    async fn list_buckets(&self) -> Result<ListBucketsOutput, S3Error<ListBucketsError>> {
+    async fn list_buckets(&self) -> S3Result<ListBucketsOutput, ListBucketsError> {
         wrap_storage(async move {
             let mut buckets = Vec::new();
 

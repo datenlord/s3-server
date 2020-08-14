@@ -1,4 +1,4 @@
-use crate::error::S3Error;
+use crate::error::S3Result;
 
 use async_trait::async_trait;
 
@@ -14,28 +14,25 @@ pub trait S3Storage {
     async fn get_object(
         &self,
         input: GetObjectRequest,
-    ) -> Result<GetObjectOutput, S3Error<GetObjectError>>;
+    ) -> S3Result<GetObjectOutput, GetObjectError>;
 
     async fn put_object(
         &self,
         input: PutObjectRequest,
-    ) -> Result<PutObjectOutput, S3Error<PutObjectError>>;
+    ) -> S3Result<PutObjectOutput, PutObjectError>;
 
     async fn delete_object(
         &self,
         input: DeleteObjectRequest,
-    ) -> Result<DeleteObjectOutput, S3Error<DeleteObjectError>>;
+    ) -> S3Result<DeleteObjectOutput, DeleteObjectError>;
 
     async fn create_bucket(
         &self,
         input: CreateBucketRequest,
-    ) -> Result<CreateBucketOutput, S3Error<CreateBucketError>>;
-    async fn delete_bucket(
-        &self,
-        input: DeleteBucketRequest,
-    ) -> Result<(), S3Error<DeleteBucketError>>;
+    ) -> S3Result<CreateBucketOutput, CreateBucketError>;
+    async fn delete_bucket(&self, input: DeleteBucketRequest) -> S3Result<(), DeleteBucketError>;
 
-    async fn head_bucket(&self, input: HeadBucketRequest) -> Result<(), S3Error<HeadBucketError>>;
+    async fn head_bucket(&self, input: HeadBucketRequest) -> S3Result<(), HeadBucketError>;
 
-    async fn list_buckets(&self) -> Result<ListBucketsOutput, S3Error<ListBucketsError>>;
+    async fn list_buckets(&self) -> S3Result<ListBucketsOutput, ListBucketsError>;
 }
