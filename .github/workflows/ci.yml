@@ -36,7 +36,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: -- --test-threads=1
+          args: --all-features -- --test-threads=1
 
   fmt:
     name: Fmt
