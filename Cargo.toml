@@ -6,9 +6,9 @@ edition = "2018"
 license = "MIT"
 repository = "https://github.com/datenlord/s3-server"
 readme = "README.md"
-description = "S3 service implementation for datenlord"
+description = "S3 service implementation"
 keywords = ["s3"]
-categories = ["web"]
+categories = ["web-programming", "web-programming::http-server"]
 
 [features]
 default = ["rt-tokio"]
