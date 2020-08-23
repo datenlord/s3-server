@@ -1,3 +1,5 @@
+//! `ByteStream`
+
 use bytes::Bytes;
 use futures::stream::Stream;
 use pin_project_lite::pin_project;
@@ -15,6 +17,7 @@ pin_project! {
 }
 
 impl<R> ByteStream<R> {
+    /// Constructs a `ByteStream`
     pub(super) const fn new(reader: R, buf_size: usize) -> Self {
         Self { reader, buf_size }
     }

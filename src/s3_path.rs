@@ -1,71 +1,105 @@
-//! A location in the S3 storage.
+//! A path in the S3 storage.
 //!
 //! + [Request styles](https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAPI.html#virtual-hosted-path-style-requests)
 //! + [Bucket nameing rules](https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules)
 
 use std::net::IpAddr;
 
+/// A path in the S3 storage
 #[derive(Debug)]
 pub enum S3Path<'a> {
+    /// Root path
     Root,
-    Bucket { bucket: &'a str },
-    Object { bucket: &'a str, key: &'a str },
+    /// Bucket path
+    Bucket {
+        /// Bucket name
+        bucket: &'a str,
+    },
+    /// Object path
+    Object {
+        /// Bucket name
+        bucket: &'a str,
+        /// Object key
+        key: &'a str,
+    },
 }
 
+/// An error which can be returned when parsing a s3 path
 #[allow(missing_copy_implementations)]
 #[derive(Debug, thiserror::Error)]
 #[error("ParseS3PathError: {:?}",.kind)]
 pub struct ParseS3PathError {
+    /// error kind
     kind: S3PathErrorKind,
 }
 
 impl ParseS3PathError {
+    /// Returns the corresponding `S3PathErrorKind` for this error
     #[must_use]
     pub const fn kind(&self) -> &S3PathErrorKind {
         &self.kind
     }
 }
 
+/// A list of `ParseS3PathError` reasons
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum S3PathErrorKind {
+    /// The request is not a valid path-style request
     InvalidPath,
+    /// The bucket name is invalid
     InvalidBucketName,
+    /// The object key is too long
     TooLongKey,
 }
 
-macro_rules! short_circuit_check{
-    {$($cond:expr;)+}=>{{
-        $({
-            let cond = $cond;
-            if !cond {
-                return false;
-            }
-
-        })+
-        true
-    }}
-}
-
+/// See [bucket nameing rules](https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules)
 fn check_bucket_name(name: &str) -> bool {
+    /// helper function
     fn is_digit_or_lowercase(b: u8) -> bool {
         b.is_ascii_lowercase() || b.is_ascii_digit()
     }
 
-    short_circuit_check! {
-        (3_usize..64).contains(&name.len());
-        name.as_bytes().iter().all(|&b|is_digit_or_lowercase(b) || b==b'.' || b==b'-');
-        name.as_bytes().first().map(|&b|is_digit_or_lowercase(b))==Some(true);
-        name.as_bytes().last().map(|&b|is_digit_or_lowercase(b))==Some(true);
-        name.parse::<IpAddr>().is_err();
-        !name.starts_with("xn--");
+    if !(3_usize..64).contains(&name.len()) {
+        return false;
     }
+
+    if !name
+        .as_bytes()
+        .iter()
+        .all(|&b| is_digit_or_lowercase(b) || b == b'.' || b == b'-')
+    {
+        return false;
+    }
+
+    if name.as_bytes().first().map(|&b| is_digit_or_lowercase(b)) != Some(true) {
+        return false;
+    }
+
+    if name.as_bytes().last().map(|&b| is_digit_or_lowercase(b)) != Some(true) {
+        return false;
+    }
+
+    if name.parse::<IpAddr>().is_ok() {
+        return false;
+    }
+
+    if name.starts_with("xn--") {
+        return false;
+    }
+
+    true
 }
 
+/// The name for a key is a sequence of Unicode characters whose UTF-8 encoding is at most 1,024 bytes long.
+/// See [object keys](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-keys)
 const fn check_key(key: &str) -> bool {
     key.len() <= 1024
 }
 
 impl<'a> S3Path<'a> {
+    /// Parse a path-style request
+    /// # Errors
+    /// Returns an `Err` if the s3 path is invalid
     pub fn try_from_path(path: &'a str) -> Result<Self, ParseS3PathError> {
         if !path.starts_with('/') {
             return Err(ParseS3PathError {

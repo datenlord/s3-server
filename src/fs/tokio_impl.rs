@@ -1,3 +1,5 @@
+//! fs implementation based on `tokio`
+
 use crate::byte_stream::ByteStream;
 use crate::error::{S3Error, S3Result};
 use crate::s3_storage::S3Storage;
@@ -21,18 +23,25 @@ use rusoto_s3::{
     ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
 };
 
+
+/// A S3 storage implementation based on file system
 #[derive(Debug)]
 pub struct FileSystem {
+    /// root path
     root: PathBuf,
 }
 
 impl FileSystem {
+    /// Constructs a file system storage located at `root`
+    /// # Errors
+    /// Returns an `Err` if current working directory is invalid or `root` doesn't exist
     pub fn new(root: impl AsRef<Path>) -> io::Result<Self> {
         let cwd = env::current_dir()?;
         let root = cwd.join(root).canonicalize()?;
         Ok(Self { root })
     }
 
+    /// resolve object path under the virtual root
     fn get_object_path(&self, bucket: &str, key: &str) -> io::Result<PathBuf> {
         let dir = Path::new(&bucket);
         let file_path = Path::new(&key);
@@ -43,6 +52,7 @@ impl FileSystem {
         Ok(ans)
     }
 
+    /// resolve bucket path under the virtual root
     fn get_bucket_path(&self, bucket: &str) -> io::Result<PathBuf> {
         let dir = Path::new(&bucket);
         let ans = dir.absolutize_virtually(&self.root)?.into();
@@ -50,6 +60,7 @@ impl FileSystem {
     }
 }
 
+/// helper function for error converting
 async fn wrap_storage<T, E, Fut>(f: Fut) -> S3Result<T, E>
 where
     Fut: Future<Output = Result<Result<T, E>, BoxStdError>> + Send,

@@ -1,8 +1,12 @@
+//! Compat types for hyper
+
 #[cfg(feature = "rt-async-std")]
 pub use with_async_std::{AsyncStdExecutor, AsyncStdListener};
 
 #[cfg(feature = "rt-async-std")]
 mod with_async_std {
+    //! Compat with `async_std`
+
     use async_std::net::{TcpListener, TcpStream};
     use async_std::task;
     use futures::io::{AsyncRead, AsyncWrite};
@@ -13,6 +17,7 @@ mod with_async_std {
     use std::pin::Pin;
     use std::task::{Context, Poll};
 
+    /// A wrapper of `async_std` executor
     #[derive(Debug, Clone, Copy)]
     pub struct AsyncStdExecutor;
 
@@ -25,20 +30,25 @@ mod with_async_std {
         }
     }
 
+    /// A wrapper of `async_std::net::TcpListener`
     #[derive(Debug)]
     #[must_use]
     pub struct AsyncStdListener {
+        /// inner listener
         listener: TcpListener,
     }
 
     impl AsyncStdListener {
+        /// Wrap an `async_std::net::TcpListener`
         pub const fn new(listener: TcpListener) -> Self {
             Self { listener }
         }
     }
 
+    /// A wrapper of `async_std::net::TcpStream`
     #[derive(Debug)]
     pub struct AsyncStdStream {
+        /// inner stream
         stream: TcpStream,
     }
 

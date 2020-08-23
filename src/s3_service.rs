@@ -1,3 +1,5 @@
+//! Generic S3 service which wraps a S3 storage
+
 use crate::error::{InvalidRequestError, S3Error, S3Result};
 use crate::s3_output::S3Output;
 use crate::s3_path::S3Path;
@@ -7,6 +9,7 @@ use crate::utils::{Request, Response};
 use futures::future::BoxFuture;
 use futures::stream::StreamExt as _;
 use hyper::Method;
+use log::debug;
 use std::io;
 use std::sync::Arc;
 use std::task::{Context, Poll};
@@ -16,12 +19,15 @@ use rusoto_s3::{
     HeadBucketRequest, PutObjectRequest,
 };
 
+/// Generic S3 service which wraps a S3 storage
 #[derive(Debug)]
 pub struct S3Service<T> {
+    /// inner storage
     inner: Arc<T>,
 }
 
 impl<T> S3Service<T> {
+    /// Constructs a S3 service
     pub fn new(inner: T) -> Self {
         Self {
             inner: Arc::new(inner),
@@ -63,6 +69,7 @@ where
     }
 }
 
+/// helper function for parsing request path
 fn parse_path(req: &Request) -> S3Result<S3Path<'_>> {
     match S3Path::try_from_path(req.uri().path()) {
         Ok(r) => Ok(r),
@@ -75,18 +82,22 @@ impl<T> S3Service<T>
 where
     T: S3Storage + Send + Sync + 'static,
 {
+    /// Call the s3 service with `hyper::Request<hyper::Body>`
+    /// # Errors
+    /// Returns an `Err` if the service failed
     pub async fn hyper_call(&self, req: Request) -> S3Result<Response> {
         let method = req.method().clone();
         let uri = req.uri().clone();
-        log::debug!("{} \"{:?}\" request:\n{:#?}", method, uri, req);
+        debug!("{} \"{:?}\" request:\n{:#?}", method, uri, req);
         let result = self.handle(req).await;
         match &result {
-            Ok(resp) => log::debug!("{} \"{:?}\" => response:\n{:#?}", method, uri, resp),
-            Err(err) => log::debug!("{} \"{:?}\" => error:\n{:#?}", method, uri, err),
+            Ok(resp) => debug!("{} \"{:?}\" => response:\n{:#?}", method, uri, resp),
+            Err(err) => debug!("{} \"{:?}\" => error:\n{:#?}", method, uri, err),
         }
         result
     }
 
+    /// handle request
     async fn handle(&self, req: Request) -> S3Result<Response> {
         let resp = match *req.method() {
             Method::GET => self.handle_get(req).await?,
@@ -99,6 +110,7 @@ where
         Ok(resp)
     }
 
+    /// handle GET request
     async fn handle_get(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
@@ -117,6 +129,8 @@ where
             }
         }
     }
+
+    /// handle POST request
     async fn handle_post(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
@@ -125,6 +139,8 @@ where
             S3Path::Object { bucket, key } => Err(S3Error::NotSupported), // TODO: impl handler
         }
     }
+
+    /// handle PUT request
     async fn handle_put(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
@@ -159,6 +175,8 @@ where
             }
         }
     }
+
+    /// handle DELETE request
     async fn handle_delete(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
@@ -180,6 +198,8 @@ where
             }
         }
     }
+
+    /// handle HEAD request
     async fn handle_head(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
