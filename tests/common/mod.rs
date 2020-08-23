@@ -1,4 +1,4 @@
-use datenlord_s3::S3Path;
+use s3_server::S3Path;
 
 use anyhow::{Context, Result};
 use hyper::{header, Body};

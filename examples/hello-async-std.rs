@@ -30,10 +30,10 @@ async fn main() -> Result<()> {
 
     let listener = {
         let tcp_listener = TcpListener::bind(addr).await?;
-        datenlord_s3::compat::AsyncStdListener::new(tcp_listener)
+        s3_server::compat::AsyncStdListener::new(tcp_listener)
     };
 
-    let executor = datenlord_s3::compat::AsyncStdExecutor;
+    let executor = s3_server::compat::AsyncStdExecutor;
 
     let make_service: _ =
         make_service_fn(move |_| future::ready(Ok::<_, anyhow::Error>(service_fn(hello))));

@@ -1,3 +1,5 @@
-# datenlord_s3
+# s3-server
 
-> S3 service implementation for datenlord
+> S3 server implementation based on [hyper][hyper]
+
+[hyper]: https://crates.io/crates/hyper

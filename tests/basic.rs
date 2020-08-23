@@ -4,8 +4,8 @@ mod common;
 
 use common::Request;
 
-use datenlord_s3::fs::TokioFileSystem as FileSystem;
-use datenlord_s3::{S3Path, S3Service};
+use s3_server::fs::TokioFileSystem as FileSystem;
+use s3_server::{S3Path, S3Service};
 
 use anyhow::{Context, Result};
 use hyper::{Body, Method, StatusCode};

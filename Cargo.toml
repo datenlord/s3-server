@@ -1,10 +1,10 @@
 [package]
-name = "datenlord_s3"
-version = "0.1.0"
+name = "s3-server"
+version = "0.1.0-dev"
 authors = ["Nugine <nugine@foxmail.com>"]
 edition = "2018"
 license = "MIT"
-repository = "https://github.com/datenlord/datenlord_s3"
+repository = "https://github.com/datenlord/s3-server"
 readme = "README.md"
 description = "S3 service implementation for datenlord"
 keywords = ["s3"]

@@ -15,8 +15,8 @@
 //!     --port <port>           [default: 8014]
 //! ```
 
-use datenlord_s3::fs::TokioFileSystem as FileSystem;
-use datenlord_s3::S3Service;
+use s3_server::fs::TokioFileSystem as FileSystem;
+use s3_server::S3Service;
 
 use anyhow::Result;
 use futures::future;
