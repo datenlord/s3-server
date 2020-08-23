@@ -62,7 +62,7 @@ mod s3_storage;
 pub mod compat;
 pub mod fs;
 
-pub use error::{NopError, S3Error, S3Result};
+pub use error::{S3Error, S3Result};
 pub use s3_path::{ParseS3PathError, S3Path, S3PathErrorKind};
 pub use s3_service::S3Service;
 pub use s3_storage::S3Storage;
