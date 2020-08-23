@@ -12,6 +12,7 @@ pub enum S3Path<'a> {
     Object { bucket: &'a str, key: &'a str },
 }
 
+#[allow(missing_copy_implementations)]
 #[derive(Debug, thiserror::Error)]
 #[error("ParseS3PathError: {:?}",.kind)]
 pub struct ParseS3PathError {
@@ -25,8 +26,7 @@ impl ParseS3PathError {
     }
 }
 
-#[allow(missing_copy_implementations)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum S3PathErrorKind {
     InvalidPath,
     InvalidBucketName,

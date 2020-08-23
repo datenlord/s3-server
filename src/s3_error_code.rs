@@ -2,7 +2,6 @@ use hyper::StatusCode;
 use std::fmt::{self, Display};
 
 /// See <https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html>
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub(super) enum S3ErrorCode {
     AccessDenied,
@@ -95,7 +94,6 @@ impl Display for S3ErrorCode {
     }
 }
 impl S3ErrorCode {
-    #[allow(dead_code)] // TODO: remove it
     #[allow(clippy::match_same_arms)]
     pub(super) fn as_status_code(self) -> Option<StatusCode> {
         match self {
