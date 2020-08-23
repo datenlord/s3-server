@@ -46,11 +46,10 @@
 )]
 
 #[macro_use]
-mod macros;
+mod utils;
 
 mod byte_stream;
 mod error;
-mod utils;
 
 mod s3_error_code;
 mod s3_output;
