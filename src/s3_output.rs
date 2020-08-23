@@ -1,3 +1,5 @@
+//! Types which can be converted into a response
+
 use crate::error::{InvalidOutputError, S3Error, S3Result};
 use crate::s3_error_code::S3ErrorCode;
 use crate::utils::{create_response, set_mime, xml_write_string_element, Response};
@@ -19,7 +21,9 @@ use rusoto_s3::{
     ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput,
 };
 
+/// Types which can be converted into a response
 pub(super) trait S3Output {
+    /// Try to convert into a response
     fn try_into_response(self) -> S3Result<Response>;
 }
 
@@ -42,6 +46,7 @@ where
     }
 }
 
+/// helper function for error converting
 fn wrap_output(f: impl FnOnce() -> Result<Response, InvalidOutputError>) -> S3Result<Response> {
     match f() {
         Ok(res) => Ok(res),
@@ -187,15 +192,21 @@ impl S3Output for GetBucketLocationOutput {
     }
 }
 
+/// Type representing an error response
 #[derive(Debug)]
 struct XmlErrorResponse {
+    /// code
     code: S3ErrorCode,
+    /// message
     message: Option<String>,
+    /// resource
     resource: Option<String>,
+    /// request_id
     request_id: Option<String>,
 }
 
 impl XmlErrorResponse {
+    /// Constructs a `XmlErrorResponse`
     const fn from_code_msg(code: S3ErrorCode, message: Option<String>) -> Self {
         Self {
             code,
@@ -258,37 +269,25 @@ impl S3Output for HeadBucketError {
 
 impl S3Output for ListBucketsError {
     fn try_into_response(self) -> S3Result<Response> {
-        Ok(create_response(
-            Body::empty(),
-            Some(StatusCode::INTERNAL_SERVER_ERROR),
-        ))
+        match self {}
     }
 }
 
 impl S3Output for PutObjectError {
     fn try_into_response(self) -> S3Result<Response> {
-        Ok(create_response(
-            Body::empty(),
-            Some(StatusCode::INTERNAL_SERVER_ERROR),
-        ))
+        match self {}
     }
 }
 
 impl S3Output for DeleteObjectError {
     fn try_into_response(self) -> S3Result<Response> {
-        Ok(create_response(
-            Body::empty(),
-            Some(StatusCode::INTERNAL_SERVER_ERROR),
-        ))
+        match self {}
     }
 }
 
 impl S3Output for DeleteBucketError {
     fn try_into_response(self) -> S3Result<Response> {
-        Ok(create_response(
-            Body::empty(),
-            Some(StatusCode::INTERNAL_SERVER_ERROR),
-        ))
+        match self {}
     }
 }
 

@@ -1,3 +1,5 @@
+//! S3 service
+
 #![forbid(unsafe_code)]
 #![deny(
     // The following are allowed by default lints according to
@@ -8,7 +10,7 @@
     elided_lifetimes_in_paths,
     missing_copy_implementations,
     missing_debug_implementations,
-    // missing_docs, // TODO: add documents
+    missing_docs,
     single_use_lifetimes,
     trivial_casts,
     trivial_numeric_casts,
@@ -39,9 +41,6 @@
 ))]
 #![allow(
     // TODO: Deny lints below
-    missing_docs,
-    clippy::missing_docs_in_private_items,
-    clippy::missing_errors_doc,
     clippy::multiple_crate_versions
 )]
 
