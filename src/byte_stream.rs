@@ -15,7 +15,6 @@ pin_project! {
 }
 
 impl<R> ByteStream<R> {
-    #[allow(dead_code)] // TODO: remove it
     pub(super) const fn new(reader: R, buf_size: usize) -> Self {
         Self { reader, buf_size }
     }
@@ -25,6 +24,7 @@ impl<R: AsyncRead> Stream for ByteStream<R> {
     type Item = io::Result<Bytes>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // TODO: reuse the buf
         let mut buf = vec![0_u8; self.buf_size];
 
         let this = self.project();
