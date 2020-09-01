@@ -275,7 +275,7 @@ impl Display for S3ErrorCode {
 impl S3ErrorCode {
     /// Returns a corresponding status code of the error code
     #[allow(clippy::match_same_arms)]
-    pub(super) fn as_status_code(self) -> Option<StatusCode> {
+    pub(super) const fn as_status_code(self) -> Option<StatusCode> {
         match self {
             Self::AccessDenied => Some(StatusCode::FORBIDDEN),
             Self::AccountProblem => Some(StatusCode::FORBIDDEN),

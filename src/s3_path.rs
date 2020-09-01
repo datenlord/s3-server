@@ -54,11 +54,6 @@ pub enum S3PathErrorKind {
 
 /// See [bucket nameing rules](https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules)
 fn check_bucket_name(name: &str) -> bool {
-    /// helper function
-    fn is_digit_or_lowercase(b: u8) -> bool {
-        b.is_ascii_lowercase() || b.is_ascii_digit()
-    }
-
     if !(3_usize..64).contains(&name.len()) {
         return false;
     }
@@ -66,16 +61,26 @@ fn check_bucket_name(name: &str) -> bool {
     if !name
         .as_bytes()
         .iter()
-        .all(|&b| is_digit_or_lowercase(b) || b == b'.' || b == b'-')
+        .all(|&b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-')
     {
         return false;
     }
 
-    if name.as_bytes().first().map(|&b| is_digit_or_lowercase(b)) != Some(true) {
+    if name
+        .as_bytes()
+        .first()
+        .map(|&b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        != Some(true)
+    {
         return false;
     }
 
-    if name.as_bytes().last().map(|&b| is_digit_or_lowercase(b)) != Some(true) {
+    if name
+        .as_bytes()
+        .last()
+        .map(|&b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        != Some(true)
+    {
         return false;
     }
 
