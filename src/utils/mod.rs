@@ -1,7 +1,10 @@
 //! utils
 
 mod byte_stream;
+mod apply;
 
+#[allow(unused_imports)]
+pub(crate) use self::apply::Apply;
 pub(crate) use self::byte_stream::ByteStream;
 
 
