@@ -1,12 +1,13 @@
 //! utils
 
-mod byte_stream;
 mod apply;
+mod byte_stream;
+mod xml;
 
 #[allow(unused_imports)]
-pub(crate) use self::apply::Apply;
-pub(crate) use self::byte_stream::ByteStream;
-
+pub use self::apply::Apply;
+pub use self::byte_stream::ByteStream;
+pub use self::xml::XmlWriterExt;
 
 #[allow(unused_macros)]
 macro_rules! cfg_rt_tokio{
@@ -25,7 +26,7 @@ use hyper::{
 use mime::Mime;
 use std::convert::TryFrom;
 use std::io;
-use xml::writer::{events::XmlEvent, EventWriter};
+use ::xml::writer::{events::XmlEvent, EventWriter};
 
 /// Request type
 pub(super) type Request = hyper::Request<Body>;
@@ -41,7 +42,7 @@ pub(super) fn xml_write_string_element<W: io::Write>(
     w: &mut EventWriter<W>,
     name: &str,
     data: &str,
-) -> xml::writer::Result<()> {
+) -> ::xml::writer::Result<()> {
     w.write(XmlEvent::start_element(name))?;
     w.write(XmlEvent::characters(data))?;
     w.write(XmlEvent::end_element())?;

@@ -1,7 +1,7 @@
 //! `Apply` trait
 
 /// Extends all sized types with an `apply` method
-pub(crate) trait Apply: Sized {
+pub trait Apply: Sized {
     /// apply `f` to self
     #[inline]
     fn apply<R>(self, f: impl FnOnce(Self) -> R) -> R {

@@ -14,7 +14,7 @@
     single_use_lifetimes,
     trivial_casts,
     trivial_numeric_casts,
-    unreachable_pub,
+    // unreachable_pub,
     unstable_features,
     unused_extern_crates,
     unused_import_braces,
@@ -38,6 +38,7 @@
     clippy::implicit_return, // actually omitting the return keyword is idiomatic Rust code
     clippy::missing_inline_in_public_items, // In general, it is not bad
     clippy::module_name_repetitions, // Allowed by default
+    unreachable_pub, // Conflicts with root-controlled visibility
     clippy::redundant_pub_crate, // Conflicts with root-controlled visibility
 )]
 #![cfg_attr(test, allow(
