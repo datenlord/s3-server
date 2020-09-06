@@ -1,6 +1,6 @@
 //! fs implementation based on `tokio`
 
-use crate::byte_stream::ByteStream;
+use crate::utils::ByteStream;
 use crate::error::{S3Error, S3Result};
 use crate::storage::S3Storage;
 use crate::utils::BoxStdError;

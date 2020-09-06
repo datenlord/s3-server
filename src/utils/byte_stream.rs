@@ -9,7 +9,7 @@ use std::task::{Context, Poll};
 use tokio::io::AsyncRead;
 
 pin_project! {
-    pub(super) struct ByteStream<R>{
+    pub struct ByteStream<R>{
         #[pin]
         reader: R,
         buf_size: usize,
@@ -18,7 +18,7 @@ pin_project! {
 
 impl<R> ByteStream<R> {
     /// Constructs a `ByteStream`
-    pub(super) const fn new(reader: R, buf_size: usize) -> Self {
+    pub(crate) const fn new(reader: R, buf_size: usize) -> Self {
         Self { reader, buf_size }
     }
 }
