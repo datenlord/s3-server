@@ -1,5 +1,9 @@
 //! Generic S3 service which wraps a S3 storage
 
+use crate::dto::{
+    CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetObjectRequest,
+    HeadBucketRequest, PutObjectRequest,
+};
 use crate::error::{InvalidRequestError, S3Error, S3Result};
 use crate::output::S3Output;
 use crate::path::S3Path;
@@ -13,11 +17,6 @@ use log::debug;
 use std::io;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-
-use rusoto_s3::{
-    CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetObjectRequest,
-    HeadBucketRequest, PutObjectRequest,
-};
 
 /// Generic S3 service which wraps a S3 storage
 #[derive(Debug)]
@@ -167,7 +166,7 @@ where
                 let input: PutObjectRequest = PutObjectRequest {
                     bucket,
                     key,
-                    body: Some(rusoto_core::ByteStream::new(body)),
+                    body: Some(crate::dto::ByteStream::new(body)),
                     ..PutObjectRequest::default() // TODO: handle other fields
                 };
 

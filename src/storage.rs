@@ -1,15 +1,16 @@
 //! Trait representing the capabilities of the Amazon S3 API at server side
 
-use crate::error::S3Result;
+use crate::{
+    dto::{
+        CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
+        DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
+        GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest,
+        ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
+    },
+    error::S3Result,
+};
 
 use async_trait::async_trait;
-
-use rusoto_s3::{
-    CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
-    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest,
-    ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
-};
 
 /// Trait representing the capabilities of the Amazon S3 API at server side
 #[async_trait]

@@ -53,6 +53,7 @@ mod utils;
 mod byte_stream;
 mod error;
 
+pub mod dto;
 mod error_code;
 mod output;
 mod path;

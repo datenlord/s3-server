@@ -15,7 +15,7 @@ use xml::{
     writer::{EventWriter, XmlEvent},
 };
 
-use rusoto_s3::{
+use crate::dto::{
     CreateBucketError, CreateBucketOutput, DeleteBucketError, DeleteObjectError,
     DeleteObjectOutput, GetBucketLocationOutput, GetObjectError, GetObjectOutput, HeadBucketError,
     ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput,

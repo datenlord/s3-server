@@ -5,6 +5,13 @@ use crate::error::{S3Error, S3Result};
 use crate::storage::S3Storage;
 use crate::utils::BoxStdError;
 
+use crate::dto::{
+    Bucket, CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
+    DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
+    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest,
+    ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
+};
+
 use async_trait::async_trait;
 use path_absolutize::Absolutize;
 use std::convert::TryInto;
@@ -15,14 +22,6 @@ use std::path::{Path, PathBuf};
 
 use tokio::fs::File;
 use tokio::stream::StreamExt as _;
-
-use rusoto_s3::{
-    CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
-    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest,
-    ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
-};
-
 
 /// A S3 storage implementation based on file system
 #[derive(Debug)]
@@ -93,7 +92,7 @@ impl S3Storage for FileSystem {
             let stream = ByteStream::new(file, 4096);
 
             let output: GetObjectOutput = GetObjectOutput {
-                body: Some(rusoto_core::ByteStream::new(stream)),
+                body: Some(crate::dto::ByteStream::new(stream)),
                 content_length: Some(content_length.try_into()?),
                 ..GetObjectOutput::default() // TODO: handle other fields
             };
@@ -192,7 +191,7 @@ impl S3Storage for FileSystem {
                 let entry = entry?;
                 if entry.file_type().await?.is_dir() {
                     let name: String = entry.file_name().to_string_lossy().into();
-                    buckets.push(rusoto_s3::Bucket {
+                    buckets.push(Bucket {
                         creation_date: None,
                         name: Some(name),
                     })
