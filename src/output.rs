@@ -1,7 +1,7 @@
 //! Types which can be converted into a response
 
 use crate::error::{InvalidOutputError, S3Error, S3Result};
-use crate::s3_error_code::S3ErrorCode;
+use crate::error_code::S3ErrorCode;
 use crate::utils::{create_response, set_mime, xml_write_string_element, Response};
 
 use std::convert::TryFrom;

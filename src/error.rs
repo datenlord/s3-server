@@ -1,6 +1,6 @@
 //! Generic s3 error type.
 
-use crate::s3_path::ParseS3PathError;
+use crate::path::ParseS3PathError;
 use crate::utils::BoxStdError;
 
 use std::convert::Infallible as Never;

@@ -53,16 +53,16 @@ mod utils;
 mod byte_stream;
 mod error;
 
-mod s3_error_code;
-mod s3_output;
-mod s3_path;
-mod s3_service;
-mod s3_storage;
+mod error_code;
+mod output;
+mod path;
+mod service;
+mod storage;
 
 pub mod compat;
 pub mod fs;
 
 pub use error::{S3Error, S3Result};
-pub use s3_path::{ParseS3PathError, S3Path, S3PathErrorKind};
-pub use s3_service::S3Service;
-pub use s3_storage::S3Storage;
+pub use path::{ParseS3PathError, S3Path, S3PathErrorKind};
+pub use service::S3Service;
+pub use storage::S3Storage;

@@ -1,9 +1,9 @@
 //! Generic S3 service which wraps a S3 storage
 
 use crate::error::{InvalidRequestError, S3Error, S3Result};
-use crate::s3_output::S3Output;
-use crate::s3_path::S3Path;
-use crate::s3_storage::S3Storage;
+use crate::output::S3Output;
+use crate::path::S3Path;
+use crate::storage::S3Storage;
 use crate::utils::{Request, Response};
 
 use futures::future::BoxFuture;

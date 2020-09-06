@@ -2,7 +2,7 @@
 
 use crate::byte_stream::ByteStream;
 use crate::error::{S3Error, S3Result};
-use crate::s3_storage::S3Storage;
+use crate::storage::S3Storage;
 use crate::utils::BoxStdError;
 
 use async_trait::async_trait;
