@@ -3,7 +3,9 @@
 use hyper::StatusCode;
 use std::fmt::{self, Display};
 
-/// See <https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html>
+/// S3 error code enum
+///
+/// See [`ErrorResponses`](https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html)
 #[derive(Debug, Clone, Copy)]
 pub enum S3ErrorCode {
     /// Access Denied
