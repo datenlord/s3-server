@@ -1,28 +1,42 @@
 //! Generic S3 service which wraps a S3 storage
 
 use crate::dto::{
-    CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetObjectRequest,
-    HeadBucketRequest, PutObjectRequest,
+    CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetBucketLocationRequest,
+    GetObjectRequest, HeadBucketRequest, HeadObjectRequest, ListObjectsRequest, PutObjectRequest,
 };
 use crate::error::{S3Error, S3Result};
 use crate::output::S3Output;
 use crate::path::S3Path;
+use crate::query::GetQuery;
 use crate::storage::S3Storage;
+use crate::utils::Apply;
 use crate::{Request, Response};
 
-use futures::future::BoxFuture;
-use futures::stream::StreamExt as _;
+use std::{
+    io,
+    ops::Deref,
+    sync::Arc,
+    task::{Context, Poll},
+};
+
+use futures::{future::BoxFuture, stream::StreamExt};
+use log::{debug, error};
+use serde::de::DeserializeOwned;
+
 use hyper::Method;
-use log::debug;
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::{io, ops::Deref};
 
 /// Generic S3 service which wraps a S3 storage
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct S3Service<T> {
     /// inner storage
     storage: T,
+}
+
+/// Shared S3 service
+#[derive(Debug)]
+pub struct SharedS3Service<T> {
+    /// inner service
+    inner: Arc<S3Service<T>>,
 }
 
 impl<T> S3Service<T> {
@@ -31,7 +45,7 @@ impl<T> S3Service<T> {
         Self { storage }
     }
 
-    /// convert `S3Service<T>` into `SharedS3Service<T>`
+    /// convert `S3Service<T>` to `SharedS3Service<T>`
     pub fn into_shared(self) -> SharedS3Service<T> {
         SharedS3Service {
             inner: Arc::new(self),
@@ -43,13 +57,6 @@ impl<T> AsRef<T> for S3Service<T> {
     fn as_ref(&self) -> &T {
         &self.storage
     }
-}
-
-/// Shared S3 service
-#[derive(Debug)]
-pub struct SharedS3Service<T> {
-    /// inner service
-    inner: Arc<S3Service<T>>,
 }
 
 impl<T> Deref for SharedS3Service<T> {
@@ -95,6 +102,17 @@ fn parse_path(req: &Request) -> S3Result<S3Path<'_>> {
     }
 }
 
+/// helper function for extracting url query
+fn extract_query<Q: DeserializeOwned>(req: &Request) -> S3Result<Option<Q>> {
+    match req.uri().query() {
+        Some(s) => serde_urlencoded::from_str::<Q>(s)
+            .map_err(|e| S3Error::InvalidRequest(e.into()))?
+            .apply(Some),
+        None => None,
+    }
+    .apply(Ok)
+}
+
 #[allow(unused_variables)] // TODO: remove it
 impl<T> S3Service<T>
 where
@@ -110,7 +128,7 @@ where
         let result = self.handle(req).await;
         match &result {
             Ok(resp) => debug!("{} \"{:?}\" => response:\n{:#?}", method, uri, resp),
-            Err(err) => debug!("{} \"{:?}\" => error:\n{:#?}", method, uri, err),
+            Err(err) => error!("{} \"{:?}\" => error:\n{:#?}", method, uri, err),
         }
         result
     }
@@ -136,7 +154,45 @@ where
                 // list buckets
                 self.storage.list_buckets().await.try_into_response()
             }
-            S3Path::Bucket { bucket } => Err(S3Error::NotSupported), // TODO: impl handler
+            S3Path::Bucket { bucket } => {
+                let mut input = ListObjectsRequest {
+                    bucket: bucket.into(),
+                    ..ListObjectsRequest::default()
+                };
+
+                let query: Option<GetQuery> = extract_query(&req)?;
+                if let Some(query) = query {
+                    if query.location.is_some() {
+                        let input = GetBucketLocationRequest {
+                            bucket: input.bucket,
+                        };
+                        return self
+                            .storage
+                            .get_bucket_location(input)
+                            .await
+                            .try_into_response();
+                    }
+
+                    macro_rules! assign_opt{
+                        (from $src:tt to $dst:tt with fields [$($field: tt),+])=>{$(
+                            if $src.$field.is_some(){
+                                $dst.$field = $dst.$field;
+                            }
+                        )+}
+                    }
+                    assign_opt!(from query to input with fields [delimiter, encoding_type, marker, max_keys, prefix]);
+
+                    if let Some(v) = req.headers().get("x-amz-request-payer") {
+                        let payer = v
+                            .to_str()
+                            .map_err(|e| S3Error::InvalidRequest(e.into()))?
+                            .to_owned();
+                        input.request_payer = Some(payer);
+                    }
+                }
+
+                self.storage.list_objects(input).await.try_into_response()
+            }
             S3Path::Object { bucket, key } => {
                 let input = GetObjectRequest {
                     bucket: bucket.into(),
@@ -229,7 +285,14 @@ where
                 };
                 self.storage.head_bucket(input).await.try_into_response()
             }
-            S3Path::Object { bucket, key } => Err(S3Error::NotSupported), // TODO: impl handler
+            S3Path::Object { bucket, key } => {
+                let input = HeadObjectRequest {
+                    bucket: bucket.into(),
+                    key: key.into(),
+                    ..HeadObjectRequest::default() // TODO: handle other fields
+                };
+                self.storage.head_object(input).await.try_into_response()
+            }
         }
     }
 }

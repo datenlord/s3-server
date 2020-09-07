@@ -1,28 +1,36 @@
 //! fs implementation based on `tokio`
 
-use crate::error::{S3Error, S3Result};
-use crate::storage::S3Storage;
-use crate::utils::ByteStream;
-use crate::BoxStdError;
-
 use crate::dto::{
-    Bucket, CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
-    DeleteObjectRequest, GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError,
-    HeadBucketOutput, HeadBucketRequest, ListBucketsError, ListBucketsOutput, PutObjectError,
-    PutObjectOutput, PutObjectRequest,
+    CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
+    DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
+    GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest, GetObjectError,
+    GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest, HeadObjectError,
+    HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput, ListObjectsError,
+    ListObjectsOutput, ListObjectsRequest, Object, PutObjectError, PutObjectOutput,
+    PutObjectRequest,
+    DeleteBucketOutput, HeadBucketOutput,Bucket
+};
+use crate::{
+    error::{S3Error, S3Result},
+    path::check_bucket_name,
+    storage::S3Storage,
+    utils::{time, Apply, ByteStream},
+    BoxStdError,
+};
+
+use std::{
+    collections::VecDeque,
+    convert::TryInto,
+    env,
+    future::Future,
+    io,
+    path::{Path, PathBuf},
 };
 
 use async_trait::async_trait;
 use path_absolutize::Absolutize;
-use std::convert::TryInto;
-use std::env;
-use std::future::Future;
-use std::io;
-use std::path::{Path, PathBuf};
 
-use tokio::fs::File;
-use tokio::stream::StreamExt as _;
+use tokio::{fs::File, stream::StreamExt};
 
 /// A S3 storage implementation based on file system
 #[derive(Debug)]
@@ -74,68 +82,6 @@ where
 
 #[async_trait]
 impl S3Storage for FileSystem {
-    async fn get_object(
-        &self,
-        input: GetObjectRequest,
-    ) -> S3Result<GetObjectOutput, GetObjectError> {
-        wrap_storage(async move {
-            let path = self.get_object_path(&input.bucket, &input.key)?;
-            let file = match File::open(&path).await {
-                Ok(file) => file,
-                Err(e) => {
-                    log::error!("{}", e);
-                    return Ok(Err(GetObjectError::NoSuchKey(
-                        "The specified key does not exist.".into(),
-                    )));
-                }
-            };
-            let content_length = file.metadata().await?.len();
-            let stream = ByteStream::new(file, 4096);
-
-            let output: GetObjectOutput = GetObjectOutput {
-                body: Some(crate::dto::ByteStream::new(stream)),
-                content_length: Some(content_length.try_into()?),
-                ..GetObjectOutput::default() // TODO: handle other fields
-            };
-
-            Ok(Ok(output))
-        })
-        .await
-    }
-    async fn put_object(
-        &self,
-        input: PutObjectRequest,
-    ) -> S3Result<PutObjectOutput, PutObjectError> {
-        wrap_storage(async move {
-            let path = self.get_object_path(&input.bucket, &input.key)?;
-
-            if let Some(body) = input.body {
-                let mut reader = tokio::io::stream_reader(body);
-                let file = File::create(&path).await?;
-                let mut writer = tokio::io::BufWriter::new(file);
-                let _ = tokio::io::copy(&mut reader, &mut writer).await?;
-            }
-
-            let output = PutObjectOutput::default(); // TODO: handle other fields
-
-            Ok(Ok(output))
-        })
-        .await
-    }
-    async fn delete_object(
-        &self,
-        input: DeleteObjectRequest,
-    ) -> S3Result<DeleteObjectOutput, DeleteObjectError> {
-        wrap_storage(async move {
-            let path = self.get_object_path(&input.bucket, &input.key)?;
-
-            tokio::fs::remove_file(path).await?;
-
-            let output = DeleteObjectOutput::default(); // TODO: handle other fields
-            Ok(Ok(output))
-        })
-        .await
-    }
     async fn create_bucket(
         &self,
         input: CreateBucketRequest,
@@ -172,23 +118,115 @@ impl S3Storage for FileSystem {
         .await
     }
 
+    async fn delete_object(
+        &self,
+        input: DeleteObjectRequest,
+    ) -> S3Result<DeleteObjectOutput, DeleteObjectError> {
+        wrap_storage(async move {
+            let path = self.get_object_path(&input.bucket, &input.key)?;
+
+            tokio::fs::remove_file(path).await?;
+
+            let output = DeleteObjectOutput::default(); // TODO: handle other fields
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn get_bucket_location(
+        &self,
+        input: GetBucketLocationRequest,
+    ) -> S3Result<GetBucketLocationOutput, GetBucketLocationError> {
+        wrap_storage(async move {
+            let path = self.get_bucket_path(&input.bucket)?;
+            if !path.exists() {
+                return Err(io::Error::new(io::ErrorKind::NotFound, "NotFound").into());
+            }
+            let output = GetBucketLocationOutput {
+                location_constraint: None, // TODO: handle region
+            };
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn get_object(
+        &self,
+        input: GetObjectRequest,
+    ) -> S3Result<GetObjectOutput, GetObjectError> {
+        wrap_storage(async move {
+            let path = self.get_object_path(&input.bucket, &input.key)?;
+            let file = match File::open(&path).await {
+                Ok(file) => file,
+                Err(e) => {
+                    log::error!("{}", e);
+                    return Ok(Err(GetObjectError::NoSuchKey(
+                        "The specified key does not exist.".into(),
+                    )));
+                }
+            };
+            let metadata = file.metadata().await?;
+            let last_modified = time::to_rfc3339(metadata.modified()?);
+            let content_length = metadata.len();
+            let stream = ByteStream::new(file, 4096);
+
+            let output: GetObjectOutput = GetObjectOutput {
+                body: Some(crate::dto::ByteStream::new(stream)),
+                content_length: Some(content_length.try_into()?),
+                last_modified: Some(last_modified),
+                ..GetObjectOutput::default() // TODO: handle other fields
+            };
+
+            Ok(Ok(output))
+        })
+        .await
+    }
+
     async fn head_bucket(
         &self,
         input: HeadBucketRequest,
     ) -> S3Result<HeadBucketOutput, HeadBucketError> {
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
-            let ans = if path.exists() {
+            if path.exists() {
                 Ok(HeadBucketOutput)
             } else {
                 Err(HeadBucketError::NoSuchBucket(
                     "The specified bucket does not exist.".into(),
                 ))
-            };
-            Ok(ans)
+            }
+            .apply(Ok)
         })
         .await
     }
+
+    async fn head_object(
+        &self,
+        input: HeadObjectRequest,
+    ) -> S3Result<HeadObjectOutput, HeadObjectError> {
+        wrap_storage(async move {
+            let path = self.get_object_path(&input.bucket, &input.key)?;
+            if path.exists() {
+                let metadata = tokio::fs::metadata(path).await?;
+                let last_modified = time::to_rfc3339(metadata.modified()?);
+                let size = metadata.len();
+                let output: HeadObjectOutput = HeadObjectOutput {
+                    content_length: Some(size.try_into()?),
+                    content_type: Some(mime::APPLICATION_OCTET_STREAM.as_ref().to_owned()), // TODO: handle content type
+                    last_modified: Some(last_modified),
+                    ..HeadObjectOutput::default()
+                };
+                Ok(output)
+            } else {
+                Err(HeadObjectError::NoSuchKey(
+                    "The specified key does not exist.".into(),
+                ))
+            }
+            .apply(Ok)
+        })
+        .await
+    }
+
     async fn list_buckets(&self) -> S3Result<ListBucketsOutput, ListBucketsError> {
         wrap_storage(async move {
             let mut buckets = Vec::new();
@@ -197,17 +235,97 @@ impl S3Storage for FileSystem {
             while let Some(entry) = iter.next().await {
                 let entry = entry?;
                 if entry.file_type().await?.is_dir() {
-                    let name: String = entry.file_name().to_string_lossy().into();
-                    buckets.push(Bucket {
-                        creation_date: None,
-                        name: Some(name),
-                    })
+                    let file_name = entry.file_name();
+                    let name = file_name.to_string_lossy();
+                    if check_bucket_name(&*name) {
+                        buckets.push(Bucket {
+                            creation_date: None,
+                            name: Some(name.into()),
+                        })
+                    }
                 }
             }
             let output = ListBucketsOutput {
                 buckets: Some(buckets),
                 owner: None, // TODO: handle owner
             };
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn list_objects(
+        &self,
+        input: ListObjectsRequest,
+    ) -> S3Result<ListObjectsOutput, ListObjectsError> {
+        wrap_storage(async move {
+            let path = self.get_bucket_path(&input.bucket)?;
+
+            let mut objects = Vec::new();
+            let mut dir_queue = VecDeque::new();
+            dir_queue.push_back(path.clone());
+
+            while let Some(dir) = dir_queue.pop_front() {
+                let mut entries = tokio::fs::read_dir(dir).await?;
+                while let Some(entry) = entries.next().await {
+                    let entry = entry?;
+                    if entry.file_type().await?.is_dir() {
+                        dir_queue.push_back(entry.path());
+                    } else {
+                        let file_path = entry.path();
+                        let key = file_path.strip_prefix(&path)?;
+
+                        let metadata = entry.metadata().await?;
+                        let last_modified = time::to_rfc3339(metadata.modified()?);
+                        let size = metadata.len();
+
+                        objects.push(Object {
+                            e_tag: None,
+                            key: Some(key.to_string_lossy().into()),
+                            last_modified: Some(last_modified),
+                            owner: None,
+                            size: Some(size.try_into()?),
+                            storage_class: None,
+                        });
+                    }
+                }
+            }
+
+            // TODO: handle other fields
+            let output = ListObjectsOutput {
+                contents: Some(objects),
+                delimiter: input.delimiter,
+                encoding_type: input.encoding_type,
+                name: Some(input.bucket),
+                common_prefixes: None,
+                is_truncated: None,
+                marker: None,
+                max_keys: None,
+                next_marker: None,
+                prefix: None,
+            };
+
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn put_object(
+        &self,
+        input: PutObjectRequest,
+    ) -> S3Result<PutObjectOutput, PutObjectError> {
+        wrap_storage(async move {
+            let path = self.get_object_path(&input.bucket, &input.key)?;
+
+            if let Some(body) = input.body {
+                let mut reader = tokio::io::stream_reader(body);
+                let file = File::create(&path).await?;
+                let mut writer = tokio::io::BufWriter::new(file);
+                let _ = tokio::io::copy(&mut reader, &mut writer).await?;
+            }
+
+            let output = PutObjectOutput::default(); // TODO: handle other fields
+
             Ok(Ok(output))
         })
         .await

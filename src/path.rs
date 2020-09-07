@@ -53,7 +53,8 @@ pub enum S3PathErrorKind {
 }
 
 /// See [bucket nameing rules](https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules)
-fn check_bucket_name(name: &str) -> bool {
+#[must_use]
+pub fn check_bucket_name(name: &str) -> bool {
     if !(3_usize..64).contains(&name.len()) {
         return false;
     }
@@ -97,7 +98,8 @@ fn check_bucket_name(name: &str) -> bool {
 
 /// The name for a key is a sequence of Unicode characters whose UTF-8 encoding is at most 1,024 bytes long.
 /// See [object keys](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-keys)
-const fn check_key(key: &str) -> bool {
+#[must_use]
+pub const fn check_key(key: &str) -> bool {
     key.len() <= 1024
 }
 

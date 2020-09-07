@@ -161,7 +161,7 @@ mod success {
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
 
-        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.status(), StatusCode::NO_CONTENT);
         assert_eq!(body, "");
 
         assert!(!dir_path.exists());
