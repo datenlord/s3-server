@@ -69,8 +69,10 @@ pub mod header;
 pub mod path;
 pub mod query;
 
-pub mod compat;
 pub mod fs;
+
+#[cfg(any(feature = "rt-async-std"))]
+pub mod compat;
 
 use hyper::Body;
 
