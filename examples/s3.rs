@@ -1,5 +1,4 @@
 //! ```shell
-//! $ RUST_LOG=info,s3_server=debug cargo run --example s3 -- --help
 //! s3-server 0.1.0-dev
 //!
 //! USAGE:
