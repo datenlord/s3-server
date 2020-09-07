@@ -14,27 +14,52 @@ use futures::future::BoxFuture;
 use futures::stream::StreamExt as _;
 use hyper::Method;
 use log::debug;
-use std::io;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::{io, ops::Deref};
 
 /// Generic S3 service which wraps a S3 storage
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct S3Service<T> {
     /// inner storage
-    inner: Arc<T>,
+    storage: T,
 }
 
 impl<T> S3Service<T> {
     /// Constructs a S3 service
-    pub fn new(inner: T) -> Self {
-        Self {
-            inner: Arc::new(inner),
+    pub const fn new(storage: T) -> Self {
+        Self { storage }
+    }
+
+    /// convert `S3Service<T>` into `SharedS3Service<T>`
+    pub fn into_shared(self) -> SharedS3Service<T> {
+        SharedS3Service {
+            inner: Arc::new(self),
         }
     }
 }
 
-impl<T> Clone for S3Service<T> {
+impl<T> AsRef<T> for S3Service<T> {
+    fn as_ref(&self) -> &T {
+        &self.storage
+    }
+}
+
+/// Shared S3 service
+#[derive(Debug)]
+pub struct SharedS3Service<T> {
+    /// inner service
+    inner: Arc<S3Service<T>>,
+}
+
+impl<T> Deref for SharedS3Service<T> {
+    type Target = S3Service<T>;
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+
+impl<T> Clone for SharedS3Service<T> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -42,13 +67,7 @@ impl<T> Clone for S3Service<T> {
     }
 }
 
-impl<T> AsRef<T> for S3Service<T> {
-    fn as_ref(&self) -> &T {
-        &*self.inner
-    }
-}
-
-impl<T> hyper::service::Service<Request> for S3Service<T>
+impl<T> hyper::service::Service<Request> for SharedS3Service<T>
 where
     T: S3Storage + Send + Sync + 'static,
 {
@@ -115,7 +134,7 @@ where
         match path {
             S3Path::Root => {
                 // list buckets
-                self.inner.list_buckets().await.try_into_response()
+                self.storage.list_buckets().await.try_into_response()
             }
             S3Path::Bucket { bucket } => Err(S3Error::NotSupported), // TODO: impl handler
             S3Path::Object { bucket, key } => {
@@ -124,7 +143,7 @@ where
                     key: key.into(),
                     ..GetObjectRequest::default() // TODO: handle other fields
                 };
-                self.inner.get_object(input).await.try_into_response()
+                self.storage.get_object(input).await.try_into_response()
             }
         }
     }
@@ -149,7 +168,7 @@ where
                     bucket: bucket.into(),
                     ..CreateBucketRequest::default() // TODO: handle other fields
                 };
-                self.inner.create_bucket(input).await.try_into_response()
+                self.storage.create_bucket(input).await.try_into_response()
             }
             S3Path::Object { bucket, key } => {
                 let bucket = bucket.into();
@@ -170,7 +189,7 @@ where
                     ..PutObjectRequest::default() // TODO: handle other fields
                 };
 
-                self.inner.put_object(input).await.try_into_response()
+                self.storage.put_object(input).await.try_into_response()
             }
         }
     }
@@ -184,7 +203,7 @@ where
                 let input: DeleteBucketRequest = DeleteBucketRequest {
                     bucket: bucket.into(),
                 };
-                self.inner.delete_bucket(input).await.try_into_response()
+                self.storage.delete_bucket(input).await.try_into_response()
             }
             S3Path::Object { bucket, key } => {
                 let input: DeleteObjectRequest = DeleteObjectRequest {
@@ -193,7 +212,7 @@ where
                     ..DeleteObjectRequest::default() // TODO: handle other fields
                 };
 
-                self.inner.delete_object(input).await.try_into_response()
+                self.storage.delete_object(input).await.try_into_response()
             }
         }
     }
@@ -208,7 +227,7 @@ where
                 let input = HeadBucketRequest {
                     bucket: bucket.into(),
                 };
-                self.inner.head_bucket(input).await.try_into_response()
+                self.storage.head_bucket(input).await.try_into_response()
             }
             S3Path::Object { bucket, key } => Err(S3Error::NotSupported), // TODO: impl handler
         }

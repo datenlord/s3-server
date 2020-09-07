@@ -7,8 +7,8 @@ mod xml;
 
 pub use self::apply::Apply;
 pub use self::byte_stream::ByteStream;
-pub use self::xml::XmlWriterExt;
 pub use self::response::ResponseExt;
+pub use self::xml::XmlWriterExt;
 
 pub mod time;
 

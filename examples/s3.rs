@@ -1,9 +1,9 @@
 //! ```shell
-//! $ RUST_LOG=info,datenlord_s3=debug cargo run --example test-s3 -- --help
-//! datenlord_s3 0.1.0
+//! $ RUST_LOG=info,s3_server=debug cargo run --example s3 -- --help
+//! s3-server 0.1.0-dev
 //!
 //! USAGE:
-//! test-s3 [OPTIONS]
+//! s3 [OPTIONS]
 //!
 //! FLAGS:
 //! -h, --help       Prints help information
@@ -45,7 +45,7 @@ async fn main() -> Result<()> {
     let fs = FileSystem::new(&args.fs_root)?;
     log::debug!("fs: {:?}", &fs);
 
-    let service = S3Service::new(fs);
+    let service = S3Service::new(fs).into_shared();
 
     let server = {
         let listener = TcpListener::bind((args.host.as_str(), args.port))?;
