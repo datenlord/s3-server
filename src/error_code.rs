@@ -5,7 +5,7 @@ use std::fmt::{self, Display};
 
 /// See <https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html>
 #[derive(Debug, Clone, Copy)]
-pub(super) enum S3ErrorCode {
+pub enum S3ErrorCode {
     /// Access Denied
     AccessDenied,
 
@@ -275,7 +275,8 @@ impl Display for S3ErrorCode {
 impl S3ErrorCode {
     /// Returns a corresponding status code of the error code
     #[allow(clippy::match_same_arms)]
-    pub(super) const fn as_status_code(self) -> Option<StatusCode> {
+    #[must_use]
+    pub const fn as_status_code(self) -> Option<StatusCode> {
         match self {
             Self::AccessDenied => Some(StatusCode::FORBIDDEN),
             Self::AccountProblem => Some(StatusCode::FORBIDDEN),

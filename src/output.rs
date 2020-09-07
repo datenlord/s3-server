@@ -22,8 +22,10 @@ use crate::dto::{
 };
 
 /// Types which can be converted into a response
-pub(super) trait S3Output {
+pub trait S3Output {
     /// Try to convert into a response
+    /// # Errors
+    /// Returns an `Err` if the output can not be converted to a response
     fn try_into_response(self) -> S3Result<Response>;
 }
 

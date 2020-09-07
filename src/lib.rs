@@ -53,18 +53,20 @@
 pub(crate) mod utils;
 
 mod error;
-mod path;
+mod error_code;
+mod output;
 mod service;
 mod storage;
 
 pub use self::error::{S3Error, S3Result};
-pub use self::path::{ParseS3PathError, S3Path, S3PathErrorKind};
+pub use self::error_code::S3ErrorCode;
+pub use self::output::S3Output;
 pub use self::service::S3Service;
 pub use self::storage::S3Storage;
 
 pub mod dto;
-mod error_code;
-mod output;
+pub mod header;
+pub mod path;
 pub mod query;
 
 pub mod compat;

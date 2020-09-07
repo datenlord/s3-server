@@ -5,7 +5,7 @@ mod common;
 use common::Request;
 
 use s3_server::fs::TokioFileSystem as FileSystem;
-use s3_server::{S3Path, S3Service};
+use s3_server::{path::S3Path, S3Service};
 
 use anyhow::{Context, Result};
 use hyper::{Body, Method, StatusCode};

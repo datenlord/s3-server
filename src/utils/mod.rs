@@ -19,6 +19,7 @@ macro_rules! cfg_rt_tokio{
     }
 }
 
+use ::xml::writer::{events::XmlEvent, EventWriter};
 use hyper::{
     header::{self, HeaderValue, InvalidHeaderValue},
     Body, StatusCode,
@@ -26,7 +27,6 @@ use hyper::{
 use mime::Mime;
 use std::convert::TryFrom;
 use std::io;
-use ::xml::writer::{events::XmlEvent, EventWriter};
 
 /// Request type
 pub(super) type Request = hyper::Request<Body>;
@@ -63,4 +63,10 @@ pub(super) fn create_response(body: impl Into<Body>, status: Option<StatusCode>)
         *res.status_mut() = status
     }
     res
+}
+
+/// verify sha256 checksum string
+pub fn is_sha256_checksum(s: &str) -> bool {
+    let is_lowercase_hex = |&c: &u8| c.is_ascii_digit() || (b'a'..=b'f').contains(&c);
+    s.len() == 64 && s.as_bytes().iter().all(is_lowercase_hex)
 }
