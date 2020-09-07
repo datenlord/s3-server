@@ -459,6 +459,87 @@ mod list_objects {
     }
 }
 
+mod list_objects_v2 {
+    //! [`ListObjectsV2`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html)
+
+    use super::*;
+    use crate::dto::{ListObjectsV2Error, ListObjectsV2Output};
+
+    impl S3Output for ListObjectsV2Error {
+        fn try_into_response(self) -> S3Result<Response> {
+            let resp = match self {
+                Self::NoSuchBucket(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg.into())
+                }
+            };
+            resp.try_into_response()
+        }
+    }
+
+    impl S3Output for ListObjectsV2Output {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_xml_output(
+                |w| {
+                    w.stack("ListBucketResult", |w| {
+                        w.opt_element(
+                            "IsTruncated",
+                            self.is_truncated.map(|b| b.to_string()).as_deref(),
+                        )?;
+                        if let Some(contents) = self.contents {
+                            for content in contents {
+                                w.stack("Contents", |w| {
+                                    w.opt_element("Key", content.key.as_deref())?;
+                                    w.opt_element(
+                                        "LastModified",
+                                        content.last_modified.as_deref(),
+                                    )?;
+                                    w.opt_element("ETag", content.e_tag.as_deref())?;
+                                    w.opt_element(
+                                        "Size",
+                                        content.size.map(|s| s.to_string()).as_deref(),
+                                    )?;
+                                    w.opt_element(
+                                        "StorageClass",
+                                        content.storage_class.as_deref(),
+                                    )?;
+                                    w.opt_stack("Owner", content.owner, |w, owner| {
+                                        w.opt_element("ID", owner.id.as_deref())?;
+                                        w.opt_element(
+                                            "DisplayName",
+                                            owner.display_name.as_deref(),
+                                        )?;
+                                        Ok(())
+                                    })
+                                })?;
+                            }
+                        }
+                        w.opt_element("Name", self.name.as_deref())?;
+                        w.opt_element("Prefix", self.prefix.as_deref())?;
+                        w.opt_element("Delimiter", self.delimiter.as_deref())?;
+                        w.opt_element("MaxKeys", self.max_keys.map(|k| k.to_string()).as_deref())?;
+                        w.opt_stack("CommonPrefixes", self.common_prefixes, |w, prefixes| {
+                            w.iter_element(prefixes.into_iter(), |w, common_prefix| {
+                                w.opt_element("Prefix", common_prefix.prefix.as_deref())
+                            })
+                        })?;
+                        w.opt_element("EncodingType", self.encoding_type.as_deref())?;
+                        w.opt_element("KeyCount", self.max_keys.map(|k| k.to_string()).as_deref())?;
+                        w.opt_element("ContinuationToken", self.continuation_token.as_deref())?;
+                        w.opt_element(
+                            "NextContinuationToken",
+                            self.next_continuation_token.as_deref(),
+                        )?;
+                        w.opt_element("StartAfter", self.start_after.as_deref())?;
+                        Ok(())
+                    })
+                },
+                NONE_CALLBACK,
+                4096,
+            )
+        }
+    }
+}
+
 mod put_object {
     //! [`PutObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
 

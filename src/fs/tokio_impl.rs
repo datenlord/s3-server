@@ -1,14 +1,14 @@
 //! fs implementation based on `tokio`
 
 use crate::dto::{
-    CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
-    GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest, GetObjectError,
-    GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest, HeadObjectError,
-    HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput, ListObjectsError,
-    ListObjectsOutput, ListObjectsRequest, Object, PutObjectError, PutObjectOutput,
+    Bucket, CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
+    DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
+    DeleteObjectRequest, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
+    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
+    HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
+    ListBucketsOutput, ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
+    ListObjectsV2Output, ListObjectsV2Request, Object, PutObjectError, PutObjectOutput,
     PutObjectRequest,
-    DeleteBucketOutput, HeadBucketOutput,Bucket
 };
 use crate::{
     error::{S3Error, S3Result},
@@ -274,6 +274,11 @@ impl S3Storage for FileSystem {
                     } else {
                         let file_path = entry.path();
                         let key = file_path.strip_prefix(&path)?;
+                        if let Some(ref prefix) = input.prefix {
+                            if !key.to_string_lossy().as_ref().starts_with(prefix) {
+                                continue;
+                            }
+                        }
 
                         let metadata = entry.metadata().await?;
                         let last_modified = time::to_rfc3339(metadata.modified()?);
@@ -303,6 +308,71 @@ impl S3Storage for FileSystem {
                 max_keys: None,
                 next_marker: None,
                 prefix: None,
+            };
+
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn list_objects_v2(
+        &self,
+        input: ListObjectsV2Request,
+    ) -> S3Result<ListObjectsV2Output, ListObjectsV2Error> {
+        dbg!(&input);
+
+        wrap_storage(async move {
+            let path = self.get_bucket_path(&input.bucket)?;
+
+            let mut objects = Vec::new();
+            let mut dir_queue = VecDeque::new();
+            dir_queue.push_back(path.clone());
+
+            while let Some(dir) = dir_queue.pop_front() {
+                let mut entries = tokio::fs::read_dir(dir).await?;
+                while let Some(entry) = entries.next().await {
+                    let entry = entry?;
+                    if entry.file_type().await?.is_dir() {
+                        dir_queue.push_back(entry.path());
+                    } else {
+                        let file_path = entry.path();
+                        let key = file_path.strip_prefix(&path)?;
+                        if let Some(ref prefix) = input.prefix {
+                            if !key.to_string_lossy().as_ref().starts_with(prefix) {
+                                continue;
+                            }
+                        }
+
+                        let metadata = entry.metadata().await?;
+                        let last_modified = time::to_rfc3339(metadata.modified()?);
+                        let size = metadata.len();
+
+                        objects.push(Object {
+                            e_tag: None,
+                            key: Some(key.to_string_lossy().into()),
+                            last_modified: Some(last_modified),
+                            owner: None,
+                            size: Some(size.try_into()?),
+                            storage_class: None,
+                        });
+                    }
+                }
+            }
+
+            // TODO: handle other fields
+            let output = ListObjectsV2Output {
+                key_count: Some(objects.len().try_into()?),
+                contents: Some(objects),
+                delimiter: input.delimiter,
+                encoding_type: input.encoding_type,
+                name: Some(input.bucket),
+                common_prefixes: None,
+                is_truncated: None,
+                max_keys: None,
+                prefix: None,
+                continuation_token: None,
+                next_continuation_token: None,
+                start_after: None,
             };
 
             Ok(Ok(output))

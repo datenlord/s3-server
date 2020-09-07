@@ -6,8 +6,8 @@ use crate::dto::{
     DeleteObjectRequest, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
     GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
     HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
-    ListBucketsOutput, ListObjectsError, ListObjectsOutput, ListObjectsRequest, PutObjectError,
-    PutObjectOutput, PutObjectRequest,
+    ListBucketsOutput, ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
+    ListObjectsV2Output, ListObjectsV2Request, PutObjectError, PutObjectOutput, PutObjectRequest,
 };
 use crate::error::S3Result;
 
@@ -66,6 +66,12 @@ pub trait S3Storage {
         &self,
         input: ListObjectsRequest,
     ) -> S3Result<ListObjectsOutput, ListObjectsError>;
+
+    /// [ListObjectsV2](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html)
+    async fn list_objects_v2(
+        &self,
+        input: ListObjectsV2Request,
+    ) -> S3Result<ListObjectsV2Output, ListObjectsV2Error>;
 
     /// [PutObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
     async fn put_object(

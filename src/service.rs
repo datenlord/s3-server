@@ -1,15 +1,19 @@
 //! Generic S3 service which wraps a S3 storage
 
-use crate::dto::{
-    CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetBucketLocationRequest,
-    GetObjectRequest, HeadBucketRequest, HeadObjectRequest, ListObjectsRequest, PutObjectRequest,
-};
 use crate::error::{S3Error, S3Result};
 use crate::output::S3Output;
 use crate::path::S3Path;
 use crate::query::GetQuery;
 use crate::storage::S3Storage;
 use crate::utils::Apply;
+use crate::{
+    dto::{
+        CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetBucketLocationRequest,
+        GetObjectRequest, HeadBucketRequest, HeadObjectRequest, ListObjectsRequest,
+        ListObjectsV2Request, PutObjectRequest,
+    },
+    utils::RequestExt,
+};
 use crate::{Request, Response};
 
 use std::{
@@ -150,21 +154,20 @@ where
     async fn handle_get(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
-            S3Path::Root => {
-                // list buckets
-                self.storage.list_buckets().await.try_into_response()
-            }
-            S3Path::Bucket { bucket } => {
-                let mut input = ListObjectsRequest {
-                    bucket: bucket.into(),
-                    ..ListObjectsRequest::default()
-                };
-
-                let query: Option<GetQuery> = extract_query(&req)?;
-                if let Some(query) = query {
+            S3Path::Root => self.storage.list_buckets().await.try_into_response(),
+            S3Path::Bucket { bucket } => match extract_query::<GetQuery>(&req)? {
+                None => {
+                    let input = ListObjectsRequest {
+                        bucket: bucket.into(),
+                        ..ListObjectsRequest::default()
+                    };
+                    self.storage.list_objects(input).await.try_into_response()
+                }
+                Some(query) => {
+                    dbg!(&query);
                     if query.location.is_some() {
                         let input = GetBucketLocationRequest {
-                            bucket: input.bucket,
+                            bucket: bucket.into(),
                         };
                         return self
                             .storage
@@ -174,25 +177,69 @@ where
                     }
 
                     macro_rules! assign_opt{
-                        (from $src:tt to $dst:tt with fields [$($field: tt),+])=>{$(
+                        (from $src:tt to $dst:tt with fields [$($field: tt,)+])=>{$(
                             if $src.$field.is_some(){
-                                $dst.$field = $dst.$field;
+                                $dst.$field = $src.$field;
                             }
                         )+}
                     }
-                    assign_opt!(from query to input with fields [delimiter, encoding_type, marker, max_keys, prefix]);
 
-                    if let Some(v) = req.headers().get("x-amz-request-payer") {
-                        let payer = v
-                            .to_str()
-                            .map_err(|e| S3Error::InvalidRequest(e.into()))?
-                            .to_owned();
-                        input.request_payer = Some(payer);
+                    match query.list_type {
+                        None => {
+                            let mut input = ListObjectsRequest {
+                                bucket: bucket.into(),
+                                ..ListObjectsRequest::default()
+                            };
+
+                            assign_opt!(from query to input with fields [
+                                delimiter,
+                                encoding_type,
+                                marker,
+                                max_keys,
+                                prefix,
+                            ]);
+
+                            if let Some(payer) = req
+                                .get_header_str("x-amz-request-payer")
+                                .map_err(|e| S3Error::InvalidRequest(e.into()))?
+                            {
+                                input.request_payer = Some(payer.to_owned());
+                            }
+
+                            self.storage.list_objects(input).await.try_into_response()
+                        }
+                        Some(2) => {
+                            let mut input = ListObjectsV2Request {
+                                bucket: bucket.into(),
+                                ..ListObjectsV2Request::default()
+                            };
+
+                            assign_opt!(from query to input with fields [
+                                continuation_token,
+                                delimiter,
+                                encoding_type,
+                                fetch_owner,
+                                max_keys,
+                                prefix,
+                                start_after,
+                            ]);
+
+                            if let Some(payer) = req
+                                .get_header_str("x-amz-request-payer")
+                                .map_err(|e| S3Error::InvalidRequest(e.into()))?
+                            {
+                                input.request_payer = Some(payer.to_owned());
+                            }
+
+                            self.storage
+                                .list_objects_v2(input)
+                                .await
+                                .try_into_response()
+                        }
+                        Some(_) => Err(S3Error::NotSupported),
                     }
                 }
-
-                self.storage.list_objects(input).await.try_into_response()
-            }
+            },
             S3Path::Object { bucket, key } => {
                 let input = GetObjectRequest {
                     bucket: bucket.into(),

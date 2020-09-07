@@ -7,8 +7,8 @@ pub use rusoto_s3::{
     GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest, GetObjectError,
     GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest, HeadObjectError,
     HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput, ListObjectsError,
-    ListObjectsOutput, ListObjectsRequest, Object, PutObjectError, PutObjectOutput,
-    PutObjectRequest,
+    ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error, ListObjectsV2Output,
+    ListObjectsV2Request, Object, PutObjectError, PutObjectOutput, PutObjectRequest,
 };
 
 /// `DeleteBucketOutput`

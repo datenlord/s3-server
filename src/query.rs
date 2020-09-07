@@ -18,4 +18,12 @@ pub struct GetQuery {
     pub max_keys: Option<i64>,
     /// prefix
     pub prefix: Option<String>,
+    /// list-type
+    pub list_type: Option<u8>,
+    /// continuation-token
+    pub continuation_token: Option<String>,
+    /// fetch-owner
+    pub fetch_owner: Option<bool>,
+    /// start-after
+    pub start_after: Option<String>,
 }
