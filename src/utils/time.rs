@@ -11,7 +11,6 @@ use std::time::SystemTime;
 const LAST_MODIFIED_TIME_FORMAT: &str = "%a, %d %b %Y %T GMT";
 
 /// convert `SystemTime` to rfc3339
-#[allow(dead_code)]
 pub fn to_rfc3339(time: SystemTime) -> String {
     let time: DateTime<Local> = time.into();
     time.to_rfc3339()

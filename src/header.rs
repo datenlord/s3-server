@@ -1,3 +1,5 @@
+#![allow(dead_code)] // TODO: remove this
+
 //! Common Request Headers
 
 use crate::utils::{is_sha256_checksum, Apply};
@@ -8,7 +10,6 @@ use smallvec::SmallVec;
 /// `x-amz-content-sha256`
 ///
 /// See [Common Request Headers](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/API/RESTCommonRequestHeaders.html)
-#[allow(dead_code)] // TODO: remove this
 #[derive(Debug)]
 pub enum AmzContentSha256<'a> {
     /// `STREAMING-AWS4-HMAC-SHA256-PAYLOAD`
@@ -30,7 +31,6 @@ pub struct ParseAmzContentSha256Error {
     _priv: (),
 }
 
-#[allow(dead_code)] // TODO: remove this
 impl<'a> AmzContentSha256<'a> {
     /// parse `ContentSha256` from `x-amz-content-sha256` header
     /// # Errors
@@ -94,7 +94,6 @@ pub(super) struct ParseAuthorizationError {
     _priv: (),
 }
 
-#[allow(dead_code)]
 impl<'a> AuthorizationV4<'a> {
     /// parse `AuthorizationV4` from `Authorization` header
     pub(super) fn from_header_str(
