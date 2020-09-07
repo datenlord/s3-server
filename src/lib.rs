@@ -43,6 +43,7 @@
 )]
 #![cfg_attr(test, allow(
     clippy::panic, // Panic when fatal failures occur
+    clippy::unwrap_used, // Tests need `unwrap`
 ))]
 #![allow(
     // TODO: Deny lints below

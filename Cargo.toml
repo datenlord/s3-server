@@ -33,6 +33,8 @@ path-absolutize = "3.0.6"
 serde = "1.0.115"
 serde_urlencoded = "0.6.1"
 chrono = "0.4.15"
+nom = "5.1.2"
+smallvec = "1.4.2"
 
 [dev-dependencies]
 tokio = { version = "0.2.22", features = ["full"] }
