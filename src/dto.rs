@@ -10,3 +10,11 @@ pub use rusoto_s3::{
     ListObjectsOutput, ListObjectsRequest, Object, PutObjectError, PutObjectOutput,
     PutObjectRequest,
 };
+
+/// `DeleteBucketOutput`
+#[derive(Debug, Clone, Copy)]
+pub struct DeleteBucketOutput;
+
+/// `HeadBucketOutput`
+#[derive(Debug, Clone, Copy)]
+pub struct HeadBucketOutput;

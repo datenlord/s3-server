@@ -1,15 +1,16 @@
 //! fs implementation based on `tokio`
 
-use crate::utils::ByteStream;
 use crate::error::{S3Error, S3Result};
 use crate::storage::S3Storage;
-use crate::utils::BoxStdError;
+use crate::utils::ByteStream;
+use crate::BoxStdError;
 
 use crate::dto::{
     Bucket, CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
-    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest,
-    ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
+    DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
+    DeleteObjectRequest, GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError,
+    HeadBucketOutput, HeadBucketRequest, ListBucketsError, ListBucketsOutput, PutObjectError,
+    PutObjectOutput, PutObjectRequest,
 };
 
 use async_trait::async_trait;
@@ -159,20 +160,26 @@ impl S3Storage for FileSystem {
         })
         .await
     }
-    async fn delete_bucket(&self, input: DeleteBucketRequest) -> S3Result<(), DeleteBucketError> {
+    async fn delete_bucket(
+        &self,
+        input: DeleteBucketRequest,
+    ) -> S3Result<DeleteBucketOutput, DeleteBucketError> {
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
             tokio::fs::remove_dir_all(path).await?;
-            Ok(Ok(()))
+            Ok(Ok(DeleteBucketOutput))
         })
         .await
     }
 
-    async fn head_bucket(&self, input: HeadBucketRequest) -> S3Result<(), HeadBucketError> {
+    async fn head_bucket(
+        &self,
+        input: HeadBucketRequest,
+    ) -> S3Result<HeadBucketOutput, HeadBucketError> {
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
             let ans = if path.exists() {
-                Ok(())
+                Ok(HeadBucketOutput)
             } else {
                 Err(HeadBucketError::NoSuchBucket(
                     "The specified bucket does not exist.".into(),

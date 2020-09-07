@@ -71,3 +71,14 @@ pub mod query;
 
 pub mod compat;
 pub mod fs;
+
+use hyper::Body;
+
+/// Request type
+pub(crate) type Request = hyper::Request<Body>;
+
+/// Response type
+pub(crate) type Response = hyper::Response<Body>;
+
+/// `Box<dyn std::error::Error + Send + Sync + 'static>`
+pub(crate) type BoxStdError = Box<dyn std::error::Error + Send + Sync + 'static>;

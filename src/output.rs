@@ -1,31 +1,29 @@
 //! Types which can be converted into a response
 
-use crate::error::{InvalidOutputError, S3Error, S3Result};
-use crate::error_code::S3ErrorCode;
-use crate::utils::{create_response, set_mime, xml_write_string_element, Response};
+#![allow(clippy::wildcard_imports)] // for `use super::*`
 
-use std::convert::TryFrom;
-
-use hyper::{
-    header::{self, HeaderValue},
-    Body, StatusCode,
+use super::{
+    error::{S3Error, S3Result},
+    error_code::S3ErrorCode,
 };
+
+use crate::{
+    utils::{time, Apply, ResponseExt, XmlWriterExt},
+    BoxStdError, Response,
+};
+
+use hyper::{header, Body, StatusCode};
 use xml::{
     common::XmlVersion,
     writer::{EventWriter, XmlEvent},
 };
 
-use crate::dto::{
-    CreateBucketError, CreateBucketOutput, DeleteBucketError, DeleteObjectError,
-    DeleteObjectOutput, GetBucketLocationOutput, GetObjectError, GetObjectOutput, HeadBucketError,
-    ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput,
-};
-
 /// Types which can be converted into a response
 pub trait S3Output {
     /// Try to convert into a response
+    ///
     /// # Errors
-    /// Returns an `Err` if the output can not be converted to a response
+    /// Returns an `Err` if the output can not be converted into a response
     fn try_into_response(self) -> S3Result<Response>;
 }
 
@@ -49,129 +47,28 @@ where
 }
 
 /// helper function for error converting
-fn wrap_output(f: impl FnOnce() -> Result<Response, InvalidOutputError>) -> S3Result<Response> {
+fn wrap_output(f: impl FnOnce() -> Result<Response, BoxStdError>) -> S3Result<Response> {
     match f() {
         Ok(res) => Ok(res),
         Err(e) => Err(<S3Error>::InvalidOutput(e)),
     }
 }
 
-impl S3Output for GetObjectOutput {
-    fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|| {
-            let mut res = Response::new(Body::empty());
-            if let Some(body) = self.body {
-                *res.body_mut() = Body::wrap_stream(body);
-            }
-            if let Some(content_length) = self.content_length {
-                let val = HeaderValue::try_from(format!("{}", content_length))?;
-                let _ = res.headers_mut().insert(header::CONTENT_LENGTH, val);
-            }
-            if let Some(content_type) = self.content_type {
-                let val = HeaderValue::try_from(content_type)?;
-                let _ = res.headers_mut().insert(header::CONTENT_TYPE, val);
-            }
-            // TODO: handle other fields
-            Ok(res)
-        })
-    }
-}
+/// a typed `None`
+const NONE_CALLBACK: Option<fn(Body) -> Response> = None;
 
-impl S3Output for CreateBucketOutput {
-    fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|| {
-            let mut res = Response::new(Body::empty());
-            if let Some(location) = self.location {
-                let val = HeaderValue::try_from(location)?;
-                let _ = res.headers_mut().insert(header::LOCATION, val);
-            }
-            Ok(res)
-        })
-    }
-}
-
-impl S3Output for PutObjectOutput {
-    fn try_into_response(self) -> S3Result<Response> {
-        let res = Response::new(Body::empty());
-        // TODO: handle other fields
-        Ok(res)
-    }
-}
-
-impl S3Output for () {
-    fn try_into_response(self) -> S3Result<Response> {
-        let res = Response::new(Body::empty());
-        Ok(res)
-    }
-}
-
-impl S3Output for DeleteObjectOutput {
-    fn try_into_response(self) -> S3Result<Response> {
-        let res = Response::new(Body::empty());
-        // TODO: handle other fields
-        Ok(res)
-    }
-}
-
-impl S3Output for ListBucketsOutput {
-    fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|| {
-            let mut body = Vec::with_capacity(4096);
-            {
-                let mut w = EventWriter::new(&mut body);
-                w.write(XmlEvent::StartDocument {
-                    version: XmlVersion::Version10,
-                    encoding: Some("UTF-8"),
-                    standalone: None,
-                })?;
-
-                w.write(XmlEvent::start_element("ListBucketsOutput"))?;
-
-                if let Some(buckets) = self.buckets {
-                    w.write(XmlEvent::start_element("Buckets"))?;
-
-                    for bucket in buckets {
-                        w.write(XmlEvent::start_element("Bucket"))?;
-                        if let Some(creation_date) = bucket.creation_date {
-                            xml_write_string_element(&mut w, "CreationDate", &creation_date)?;
-                        }
-
-                        if let Some(name) = bucket.name {
-                            xml_write_string_element(&mut w, "Name", &name)?;
-                        }
-                        w.write(XmlEvent::end_element())?;
-                    }
-
-                    w.write(XmlEvent::end_element())?;
-                }
-
-                if let Some(owner) = self.owner {
-                    w.write(XmlEvent::start_element("Owner"))?;
-                    if let Some(display_name) = owner.display_name {
-                        xml_write_string_element(&mut w, "DisplayName", &display_name)?;
-                    }
-                    if let Some(id) = owner.id {
-                        xml_write_string_element(&mut w, "ID", &id)?;
-                    }
-                }
-
-                w.write(XmlEvent::end_element())?;
-            }
-
-            let mut res = Response::new(Body::from(body));
-            set_mime(&mut res, &mime::TEXT_XML)?;
-
-            // TODO: handle other fields
-
-            Ok(res)
-        })
-    }
-}
-
-impl S3Output for GetBucketLocationOutput {
-    fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|| {
-            let mut body = Vec::with_capacity(64);
+/// helper function for generating xml response
+fn wrap_xml_output<F>(
+    f: F,
+    r: Option<impl FnOnce(Body) -> Response>,
+    cap: usize,
+) -> S3Result<Response>
+where
+    F: FnOnce(&mut EventWriter<&mut Vec<u8>>) -> Result<(), xml::writer::Error>,
+{
+    wrap_output(move || {
+        let mut body = Vec::with_capacity(cap);
+        {
             let mut w = EventWriter::new(&mut body);
             w.write(XmlEvent::StartDocument {
                 version: XmlVersion::Version10,
@@ -179,19 +76,17 @@ impl S3Output for GetBucketLocationOutput {
                 standalone: None,
             })?;
 
-            w.write(XmlEvent::start_element("LocationConstraint"))?;
-            if let Some(location_constraint) = self.location_constraint {
-                w.write(XmlEvent::characters(&location_constraint))?;
-            }
-            w.write(XmlEvent::end_element())?;
+            f(&mut w)?;
+        }
 
-            let mut res = Response::new(Body::from(body));
-            set_mime(&mut res, &mime::TEXT_XML)?;
-            // TODO: handle other fields
+        let mut res = match r {
+            None => Response::new(Body::from(body)),
+            Some(r) => r(Body::from(body)),
+        };
+        res.set_mime(&mime::TEXT_XML)?;
 
-            Ok(res)
-        })
-    }
+        Ok(res)
+    })
 }
 
 /// Type representing an error response
@@ -221,99 +116,366 @@ impl XmlErrorResponse {
 
 impl S3Output for XmlErrorResponse {
     fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|| {
-            let mut body = Vec::with_capacity(64);
-            let mut w = EventWriter::new(&mut body);
-            w.write(XmlEvent::StartDocument {
-                version: XmlVersion::Version10,
-                encoding: Some("UTF-8"),
-                standalone: None,
-            })?;
+        wrap_xml_output(
+            |w| {
+                w.stack("Error", |w| {
+                    w.opt_element("Code", Some(&self.code.to_string()))?;
+                    w.opt_element("Message", self.message.as_deref())?;
+                    w.opt_element("Resource", self.resource.as_deref())?;
+                    w.opt_element("RequestId", self.request_id.as_deref())?;
+                    Ok(())
+                })
+            },
+            Some(|body| {
+                let status = self
+                    .code
+                    .as_status_code()
+                    .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
-            w.write(XmlEvent::start_element("Error"))?;
+                Response::new_with_status(body, status)
+            }),
+            64,
+        )
+    }
+}
 
-            xml_write_string_element(&mut w, "Code", &self.code.to_string())?;
-            if let Some(message) = self.message {
-                xml_write_string_element(&mut w, "Message", &message)?;
-            }
-            if let Some(resource) = self.resource {
-                xml_write_string_element(&mut w, "Resource", &resource)?;
-            }
-            if let Some(request_id) = self.request_id {
-                xml_write_string_element(&mut w, "RequestId", &request_id)?;
-            }
+mod create_bucket {
+    //! [`CreateBucket`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html)
 
-            w.write(XmlEvent::end_element())?;
+    use super::*;
+    use crate::dto::{CreateBucketError, CreateBucketOutput};
 
-            let status = self
-                .code
-                .as_status_code()
-                .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    impl S3Output for CreateBucketOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_output(|| {
+                let mut res = Response::new(Body::empty());
+                res.set_opt_header(header::LOCATION, self.location)?;
+                Ok(res)
+            })
+        }
+    }
 
-            let mut res = create_response(body, Some(status));
-            set_mime(&mut res, &mime::TEXT_XML)?;
+    impl S3Output for CreateBucketError {
+        fn try_into_response(self) -> S3Result<Response> {
+            let resp = match self {
+                Self::BucketAlreadyExists(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::BucketAlreadyExists, msg.into())
+                }
+                Self::BucketAlreadyOwnedByYou(msg) => XmlErrorResponse::from_code_msg(
+                    S3ErrorCode::BucketAlreadyOwnedByYou,
+                    msg.into(),
+                ),
+            };
+            resp.try_into_response()
+        }
+    }
+}
 
+mod delete_bucket {
+    //! [`DeleteBucket`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucket.html)
+
+    use super::*;
+    use crate::dto::{DeleteBucketError, DeleteBucketOutput};
+    use crate::utils::Apply;
+
+    impl S3Output for DeleteBucketOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            Response::new_with_status(Body::empty(), StatusCode::NO_CONTENT).apply(Ok)
+        }
+    }
+
+    impl S3Output for DeleteBucketError {
+        fn try_into_response(self) -> S3Result<Response> {
+            match self {}
+        }
+    }
+}
+
+mod delete_object {
+    //! [`DeleteObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html)
+
+    use super::*;
+    use crate::dto::{DeleteObjectError, DeleteObjectOutput};
+
+    impl S3Output for DeleteObjectOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            let res = Response::new(Body::empty());
+            // TODO: handle other fields
             Ok(res)
-        })
+        }
+    }
+
+    impl S3Output for DeleteObjectError {
+        fn try_into_response(self) -> S3Result<Response> {
+            match self {}
+        }
     }
 }
 
-impl S3Output for HeadBucketError {
-    fn try_into_response(self) -> S3Result<Response> {
-        let resp = match self {
-            Self::NoSuchBucket(msg) => {
-                XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg.into())
-            }
-        };
-        resp.try_into_response()
+mod get_object {
+    //! [`GetObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)
+
+    use super::*;
+    use crate::dto::{GetObjectError, GetObjectOutput};
+
+    impl S3Output for GetObjectOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_output(|| {
+                let mut res = Response::new(Body::empty());
+                if let Some(body) = self.body {
+                    *res.body_mut() = Body::wrap_stream(body);
+                }
+                res.set_opt_header(
+                    header::CONTENT_LENGTH,
+                    self.content_length.map(|l| format!("{}", l)),
+                )?;
+                res.set_opt_header(header::CONTENT_TYPE, self.content_type)?;
+
+                res.set_opt_last_modified(time::map_opt_rfc3339_to_last_modified(
+                    self.last_modified,
+                )?)?;
+                // TODO: handle other fields
+                Ok(res)
+            })
+        }
+    }
+
+    impl S3Output for GetObjectError {
+        fn try_into_response(self) -> S3Result<Response> {
+            let resp = match self {
+                Self::NoSuchKey(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchKey, msg.into())
+                }
+            };
+            resp.try_into_response()
+        }
     }
 }
 
-impl S3Output for ListBucketsError {
-    fn try_into_response(self) -> S3Result<Response> {
-        match self {}
+mod get_bucket_location {
+    //! [`GetBucketLocation`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketLocation.html)
+
+    use super::*;
+    use crate::dto::{GetBucketLocationError, GetBucketLocationOutput};
+
+    impl S3Output for GetBucketLocationOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_xml_output(
+                |w| {
+                    w.element(
+                        "LocationConstraint",
+                        self.location_constraint.as_deref().unwrap_or(""),
+                    )
+                },
+                NONE_CALLBACK,
+                4096,
+            )
+        }
+    }
+
+    impl S3Output for GetBucketLocationError {
+        fn try_into_response(self) -> S3Result<Response> {
+            match self {}
+        }
     }
 }
 
-impl S3Output for PutObjectError {
-    fn try_into_response(self) -> S3Result<Response> {
-        match self {}
+mod head_bucket {
+    //! [`HeadBucket`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html)
+
+    use super::*;
+    use crate::dto::{HeadBucketError, HeadBucketOutput};
+
+    impl S3Output for HeadBucketOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            Response::new(Body::empty()).apply(Ok)
+        }
+    }
+
+    impl S3Output for HeadBucketError {
+        fn try_into_response(self) -> S3Result<Response> {
+            let resp = match self {
+                Self::NoSuchBucket(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg.into())
+                }
+            };
+            resp.try_into_response()
+        }
     }
 }
 
-impl S3Output for DeleteObjectError {
-    fn try_into_response(self) -> S3Result<Response> {
-        match self {}
+mod head_object {
+    //! [`HeadObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html)
+
+    use super::*;
+    use crate::dto::{HeadObjectError, HeadObjectOutput};
+
+    impl S3Output for HeadObjectOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_output(|| {
+                let mut res = Response::new(Body::empty());
+                res.set_opt_header(header::CONTENT_TYPE, self.content_type)?;
+                res.set_opt_header(
+                    header::CONTENT_LENGTH,
+                    self.content_length.map(|l| l.to_string()),
+                )?;
+                res.set_opt_last_modified(time::map_opt_rfc3339_to_last_modified(
+                    self.last_modified,
+                )?)?;
+                res.set_opt_header(header::ETAG, self.e_tag)?;
+                res.set_opt_header(header::EXPIRES, self.expires)?;
+                // TODO: handle other fields
+                Ok(res)
+            })
+        }
+    }
+
+    impl S3Output for HeadObjectError {
+        fn try_into_response(self) -> S3Result<Response> {
+            let resp = match self {
+                Self::NoSuchKey(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchKey, msg.into())
+                }
+            };
+            resp.try_into_response()
+        }
     }
 }
 
-impl S3Output for DeleteBucketError {
-    fn try_into_response(self) -> S3Result<Response> {
-        match self {}
+mod list_buckets {
+    //! [`ListBuckets`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html)
+
+    use super::*;
+    use crate::dto::{ListBucketsError, ListBucketsOutput};
+
+    impl S3Output for ListBucketsOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_xml_output(
+                |w| {
+                    w.stack("ListBucketsOutput", |w| {
+                        w.opt_stack("Buckets", self.buckets, |w, buckets| {
+                            for bucket in buckets {
+                                w.stack("Bucket", |w| {
+                                    w.opt_element("CreationDate", bucket.creation_date.as_deref())?;
+                                    w.opt_element("Name", bucket.name.as_deref())
+                                })?;
+                            }
+                            Ok(())
+                        })?;
+
+                        w.opt_stack("Owner", self.owner, |w, owner| {
+                            w.opt_element("DisplayName", owner.display_name.as_deref())?;
+                            w.opt_element("ID", owner.id.as_deref())
+                        })?;
+                        Ok(())
+                    })
+                },
+                NONE_CALLBACK,
+                4096,
+            )
+        }
+    }
+
+    impl S3Output for ListBucketsError {
+        fn try_into_response(self) -> S3Result<Response> {
+            match self {}
+        }
     }
 }
 
-impl S3Output for CreateBucketError {
-    fn try_into_response(self) -> S3Result<Response> {
-        let resp = match self {
-            Self::BucketAlreadyExists(msg) => {
-                XmlErrorResponse::from_code_msg(S3ErrorCode::BucketAlreadyExists, msg.into())
-            }
-            Self::BucketAlreadyOwnedByYou(msg) => {
-                XmlErrorResponse::from_code_msg(S3ErrorCode::BucketAlreadyOwnedByYou, msg.into())
-            }
-        };
-        resp.try_into_response()
+mod list_objects {
+    //! [`ListObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html)
+
+    use super::*;
+    use crate::dto::{ListObjectsError, ListObjectsOutput};
+
+    impl S3Output for ListObjectsError {
+        fn try_into_response(self) -> S3Result<Response> {
+            let resp = match self {
+                Self::NoSuchBucket(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg.into())
+                }
+            };
+            resp.try_into_response()
+        }
+    }
+
+    impl S3Output for ListObjectsOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_xml_output(
+                |w| {
+                    w.stack("ListBucketResult", |w| {
+                        w.opt_element(
+                            "IsTruncated",
+                            self.is_truncated.map(|b| b.to_string()).as_deref(),
+                        )?;
+                        w.opt_element("Marker", self.marker.as_deref())?;
+                        w.opt_element("NextMarker", self.next_marker.as_deref())?;
+                        if let Some(contents) = self.contents {
+                            for content in contents {
+                                w.stack("Contents", |w| {
+                                    w.opt_element("Key", content.key.as_deref())?;
+                                    w.opt_element(
+                                        "LastModified",
+                                        content.last_modified.as_deref(),
+                                    )?;
+                                    w.opt_element("ETag", content.e_tag.as_deref())?;
+                                    w.opt_element(
+                                        "Size",
+                                        content.size.map(|s| s.to_string()).as_deref(),
+                                    )?;
+                                    w.opt_element(
+                                        "StorageClass",
+                                        content.storage_class.as_deref(),
+                                    )?;
+                                    w.opt_stack("Owner", content.owner, |w, owner| {
+                                        w.opt_element("ID", owner.id.as_deref())?;
+                                        w.opt_element(
+                                            "DisplayName",
+                                            owner.display_name.as_deref(),
+                                        )?;
+                                        Ok(())
+                                    })
+                                })?;
+                            }
+                        }
+                        w.opt_element("Name", self.name.as_deref())?;
+                        w.opt_element("Prefix", self.prefix.as_deref())?;
+                        w.opt_element("Delimiter", self.delimiter.as_deref())?;
+                        w.opt_element("MaxKeys", self.max_keys.map(|k| k.to_string()).as_deref())?;
+                        w.opt_stack("CommonPrefixes", self.common_prefixes, |w, prefixes| {
+                            w.iter_element(prefixes.into_iter(), |w, common_prefix| {
+                                w.opt_element("Prefix", common_prefix.prefix.as_deref())
+                            })
+                        })?;
+                        w.opt_element("EncodingType", self.encoding_type.as_deref())?;
+                        Ok(())
+                    })
+                },
+                NONE_CALLBACK,
+                4096,
+            )
+        }
     }
 }
 
-impl S3Output for GetObjectError {
-    fn try_into_response(self) -> S3Result<Response> {
-        let resp = match self {
-            Self::NoSuchKey(msg) => {
-                XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchKey, msg.into())
-            }
-        };
-        resp.try_into_response()
+mod put_object {
+    //! [`PutObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
+
+    use super::*;
+    use crate::dto::{PutObjectError, PutObjectOutput};
+
+    impl S3Output for PutObjectOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            let res = Response::new(Body::empty());
+            // TODO: handle other fields
+            Ok(res)
+        }
+    }
+
+    impl S3Output for PutObjectError {
+        fn try_into_response(self) -> S3Result<Response> {
+            match self {}
+        }
     }
 }

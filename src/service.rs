@@ -4,11 +4,11 @@ use crate::dto::{
     CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetObjectRequest,
     HeadBucketRequest, PutObjectRequest,
 };
-use crate::error::{InvalidRequestError, S3Error, S3Result};
+use crate::error::{S3Error, S3Result};
 use crate::output::S3Output;
 use crate::path::S3Path;
 use crate::storage::S3Storage;
-use crate::utils::{Request, Response};
+use crate::{Request, Response};
 
 use futures::future::BoxFuture;
 use futures::stream::StreamExt as _;
@@ -72,7 +72,7 @@ where
 fn parse_path(req: &Request) -> S3Result<S3Path<'_>> {
     match S3Path::try_from_path(req.uri().path()) {
         Ok(r) => Ok(r),
-        Err(e) => Err(S3Error::InvalidRequest(InvalidRequestError::ParsePath(e))),
+        Err(e) => Err(S3Error::InvalidRequest(e.into())),
     }
 }
 

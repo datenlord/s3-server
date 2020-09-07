@@ -3,9 +3,10 @@
 use crate::{
     dto::{
         CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-        DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest,
-        GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest,
-        ListBucketsError, ListBucketsOutput, PutObjectError, PutObjectOutput, PutObjectRequest,
+        DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
+        DeleteObjectRequest, GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError,
+        HeadBucketOutput, HeadBucketRequest, ListBucketsError, ListBucketsOutput, PutObjectError,
+        PutObjectOutput, PutObjectRequest,
     },
     error::S3Result,
 };
@@ -40,10 +41,16 @@ pub trait S3Storage {
     ) -> S3Result<CreateBucketOutput, CreateBucketError>;
 
     /// [DeleteBucket](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucket.html)
-    async fn delete_bucket(&self, input: DeleteBucketRequest) -> S3Result<(), DeleteBucketError>;
+    async fn delete_bucket(
+        &self,
+        input: DeleteBucketRequest,
+    ) -> S3Result<DeleteBucketOutput, DeleteBucketError>;
 
     /// [HeadBucket](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html)
-    async fn head_bucket(&self, input: HeadBucketRequest) -> S3Result<(), HeadBucketError>;
+    async fn head_bucket(
+        &self,
+        input: HeadBucketRequest,
+    ) -> S3Result<HeadBucketOutput, HeadBucketError>;
 
     /// [ListBuckets](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html)
     async fn list_buckets(&self) -> S3Result<ListBucketsOutput, ListBucketsError>;
