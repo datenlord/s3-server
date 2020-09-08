@@ -1,11 +1,14 @@
 //! Generic S3 service which wraps a S3 storage
 
-use crate::error::{S3Error, S3Result};
-use crate::output::S3Output;
 use crate::path::S3Path;
 use crate::query::GetQuery;
 use crate::storage::S3Storage;
 use crate::utils::Apply;
+use crate::{
+    dto,
+    error::{S3Error, S3Result},
+    BoxStdError,
+};
 use crate::{
     dto::{
         CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetBucketLocationRequest,
@@ -14,9 +17,11 @@ use crate::{
     },
     utils::RequestExt,
 };
+use crate::{output::S3Output, query::PostQuery};
 use crate::{Request, Response};
 
 use std::{
+    future::Future,
     io,
     ops::Deref,
     sync::Arc,
@@ -27,7 +32,7 @@ use futures::{future::BoxFuture, stream::StreamExt};
 use log::{debug, error};
 use serde::de::DeserializeOwned;
 
-use hyper::Method;
+use hyper::{Body, Method};
 
 /// Generic S3 service which wraps a S3 storage
 #[derive(Debug)]
@@ -98,6 +103,11 @@ where
     }
 }
 
+/// wrap handle
+async fn wrap_handle<T>(f: impl Future<Output = Result<T, BoxStdError>> + Send) -> S3Result<T> {
+    f.await.map_err(|e| S3Error::InvalidRequest(e))
+}
+
 /// helper function for parsing request path
 fn parse_path(req: &Request) -> S3Result<S3Path<'_>> {
     match S3Path::try_from_path(req.uri().path()) {
@@ -115,6 +125,30 @@ fn extract_query<Q: DeserializeOwned>(req: &Request) -> S3Result<Option<Q>> {
         None => None,
     }
     .apply(Ok)
+}
+
+/// deserialize xml body
+async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> S3Result<T> {
+    wrap_handle(async move {
+        let bytes = hyper::body::to_bytes(body).await?;
+        let ans: T = quick_xml::de::from_reader(&*bytes)?;
+        Ok(ans)
+    })
+    .await
+}
+
+macro_rules! assign_opt{
+    (from $src:tt to $dst:tt with fields [$($field: tt,)+])=>{$(
+        if $src.$field.is_some(){
+            $dst.$field = $src.$field;
+        }
+    )+};
+
+    (from $req:tt header $name:tt to $dst:tt field $field:tt) => {{
+        if let Some(s) = $req.get_header_str($name).map_err(|e|S3Error::InvalidRequest(e.into()))? {
+            $dst.$field = Some(s.into());
+        }
+    }};
 }
 
 #[allow(unused_variables)] // TODO: remove it
@@ -176,14 +210,6 @@ where
                             .try_into_response();
                     }
 
-                    macro_rules! assign_opt{
-                        (from $src:tt to $dst:tt with fields [$($field: tt,)+])=>{$(
-                            if $src.$field.is_some(){
-                                $dst.$field = $src.$field;
-                            }
-                        )+}
-                    }
-
                     match query.list_type {
                         None => {
                             let mut input = ListObjectsRequest {
@@ -224,12 +250,7 @@ where
                                 start_after,
                             ]);
 
-                            if let Some(payer) = req
-                                .get_header_str("x-amz-request-payer")
-                                .map_err(|e| S3Error::InvalidRequest(e.into()))?
-                            {
-                                input.request_payer = Some(payer.to_owned());
-                            }
+                            assign_opt!(from req header "x-amz-request-payer" to input field request_payer);
 
                             self.storage
                                 .list_objects_v2(input)
@@ -252,11 +273,32 @@ where
     }
 
     /// handle POST request
-    async fn handle_post(&self, req: Request) -> S3Result<Response> {
+    async fn handle_post(&self, mut req: Request) -> S3Result<Response> {
+        let body = req.take_body();
         let path = parse_path(&req)?;
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
-            S3Path::Bucket { bucket } => Err(S3Error::NotSupported), // TODO: impl handler
+            S3Path::Bucket { bucket } => {
+                match extract_query::<PostQuery>(&req)? {
+                    Some(query) => {
+                        if query.delete.is_some() {
+                            let delete: dto::xml::Delete = deserialize_xml_body(body).await?;
+                            let mut input: dto::DeleteObjectsRequest = dto::DeleteObjectsRequest {
+                                delete: delete.into(),
+                                bucket: bucket.into(),
+                                ..dto::DeleteObjectsRequest::default()
+                            };
+                            assign_opt!(from req header "x-amz-mfa" to input field mfa);
+                            assign_opt!(from req header "x-amz-request-payer" to input field request_payer);
+                            // TODO: handle "x-amz-bypass-governance-retention"
+                            self.storage.delete_objects(input).await.try_into_response()
+                        } else {
+                            Err(S3Error::NotSupported)
+                        }
+                    }
+                    None => Err(S3Error::NotSupported),
+                }
+            } // TODO: impl handler
             S3Path::Object { bucket, key } => Err(S3Error::NotSupported), // TODO: impl handler
         }
     }

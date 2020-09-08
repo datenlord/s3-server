@@ -3,10 +3,11 @@
 use crate::dto::{
     CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
     DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
-    DeleteObjectRequest, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
-    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
-    HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
-    ListBucketsOutput, ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
+    DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
+    GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest, GetObjectError,
+    GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput, HeadBucketRequest,
+    HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput,
+    ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
     ListObjectsV2Output, ListObjectsV2Request, PutObjectError, PutObjectOutput, PutObjectRequest,
 };
 use crate::error::S3Result;
@@ -33,6 +34,12 @@ pub trait S3Storage {
         &self,
         input: DeleteObjectRequest,
     ) -> S3Result<DeleteObjectOutput, DeleteObjectError>;
+
+    /// [DeleteObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html)
+    async fn delete_objects(
+        &self,
+        input: DeleteObjectsRequest,
+    ) -> S3Result<DeleteObjectsOutput, DeleteObjectsError>;
 
     /// [GetBucketLocation](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketLocation.html)
     async fn get_bucket_location(

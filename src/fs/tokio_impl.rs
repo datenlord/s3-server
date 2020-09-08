@@ -1,12 +1,13 @@
 //! fs implementation based on `tokio`
 
 use crate::dto::{
-    Bucket, CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
+    self, Bucket, CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
     DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
-    DeleteObjectRequest, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
-    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
-    HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
-    ListBucketsOutput, ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
+    DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
+    GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest, GetObjectError,
+    GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput, HeadBucketRequest,
+    HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput,
+    ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
     ListObjectsV2Output, ListObjectsV2Request, Object, PutObjectError, PutObjectOutput,
     PutObjectRequest,
 };
@@ -128,6 +129,38 @@ impl S3Storage for FileSystem {
             tokio::fs::remove_file(path).await?;
 
             let output = DeleteObjectOutput::default(); // TODO: handle other fields
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn delete_objects(
+        &self,
+        input: DeleteObjectsRequest,
+    ) -> S3Result<DeleteObjectsOutput, DeleteObjectsError> {
+        wrap_storage(async move {
+            let mut objects: Vec<(PathBuf, String)> = Vec::new();
+            for object in input.delete.objects {
+                let path = self.get_object_path(&input.bucket, &object.key)?;
+                if path.exists() {
+                    objects.push((path, object.key))
+                } else {
+                    return Err(io::Error::new(io::ErrorKind::NotFound, "No such object").into());
+                }
+            }
+
+            let mut deleted: Vec<dto::DeletedObject> = Vec::new();
+            for (path, key) in objects {
+                tokio::fs::remove_file(path).await?;
+                deleted.push(dto::DeletedObject {
+                    key: Some(key),
+                    ..dto::DeletedObject::default()
+                });
+            }
+            let output = DeleteObjectsOutput {
+                deleted: Some(deleted),
+                ..DeleteObjectsOutput::default()
+            };
             Ok(Ok(output))
         })
         .await

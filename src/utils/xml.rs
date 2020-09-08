@@ -1,6 +1,6 @@
 //! helper trait for writing xml
 
-use std::io;
+use std::{io, ops::Deref};
 use xml::writer::{events::XmlEvent, EventWriter, Result};
 
 /// helper trait for writing xml
@@ -20,7 +20,7 @@ pub trait XmlWriterExt {
     fn element(&mut self, name: &str, data: &str) -> Result<()>;
 
     /// write xml optional element
-    fn opt_element(&mut self, name: &str, data: Option<&str>) -> Result<()>;
+    fn opt_element(&mut self, name: &str, data: Option<impl Deref<Target = str>>) -> Result<()>;
 
     /// write xml by an iterator
     fn iter_element<T>(
@@ -57,10 +57,10 @@ impl<W: io::Write> XmlWriterExt for EventWriter<W> {
         self.write(XmlEvent::end_element())
     }
 
-    fn opt_element(&mut self, name: &str, data: Option<&str>) -> Result<()> {
+    fn opt_element(&mut self, name: &str, data: Option<impl Deref<Target = str>>) -> Result<()> {
         if let Some(data) = data {
             self.write(XmlEvent::start_element(name))?;
-            self.write(XmlEvent::characters(data))?;
+            self.write(XmlEvent::characters(&*data))?;
             self.write(XmlEvent::end_element())?;
         }
         Ok(())

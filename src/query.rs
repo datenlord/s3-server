@@ -27,3 +27,11 @@ pub struct GetQuery {
     /// start-after
     pub start_after: Option<String>,
 }
+
+/// Url query of a POST S3 request
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct PostQuery {
+    /// delete
+    pub delete: Option<String>,
+}

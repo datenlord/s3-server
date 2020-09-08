@@ -35,6 +35,7 @@ serde_urlencoded = "0.7.0"
 chrono = "0.4.15"
 nom = "5.1.2"
 smallvec = "1.4.2"
+quick-xml = { version = "0.18.1", features = ["serialize"] }
 
 [dev-dependencies]
 tokio = { version = "0.2.22", features = ["full"] }

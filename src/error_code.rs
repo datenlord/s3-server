@@ -364,4 +364,103 @@ impl S3ErrorCode {
             Self::UserKeyMustBeSpecified => Some(StatusCode::BAD_REQUEST),
         }
     }
+
+    /// Returns a corresponding string of the error code
+    #[must_use]
+    pub const fn as_static_str(self) -> &'static str {
+        macro_rules! map_str{
+            [$($v:tt,)+]=>{
+                match self {
+                    $(
+                        Self::$v => stringify!($v),
+                    )+
+                }
+            }
+        }
+
+        map_str![
+            AccessDenied,
+            AccountProblem,
+            AllAccessDisabled,
+            AmbiguousGrantByEmailAddress,
+            AuthorizationHeaderMalformed,
+            BadDigest,
+            BucketAlreadyExists,
+            BucketAlreadyOwnedByYou,
+            BucketNotEmpty,
+            CredentialsNotSupported,
+            CrossLocationLoggingProhibited,
+            EntityTooSmall,
+            EntityTooLarge,
+            ExpiredToken,
+            IllegalLocationConstraintException,
+            IllegalVersioningConfigurationException,
+            IncompleteBody,
+            IncorrectNumberOfFilesInPostRequest,
+            InlineDataTooLarge,
+            InternalError,
+            InvalidAccessKeyId,
+            InvalidAddressingHeader,
+            InvalidArgument,
+            InvalidBucketName,
+            InvalidBucketState,
+            InvalidDigest,
+            InvalidEncryptionAlgorithmError,
+            InvalidLocationConstraint,
+            InvalidObjectState,
+            InvalidPart,
+            InvalidPartOrder,
+            InvalidPayer,
+            InvalidPolicyDocument,
+            InvalidRange,
+            InvalidRequest,
+            InvalidSecurity,
+            InvalidSOAPRequest,
+            InvalidStorageClass,
+            InvalidTargetBucketForLogging,
+            InvalidToken,
+            InvalidURI,
+            KeyTooLongError,
+            MalformedACLError,
+            MalformedPOSTRequest,
+            MalformedXML,
+            MaxMessageLengthExceeded,
+            MaxPostPreDataLengthExceededError,
+            MetadataTooLarge,
+            MethodNotAllowed,
+            MissingAttachment,
+            MissingContentLength,
+            MissingRequestBodyError,
+            MissingSecurityElement,
+            MissingSecurityHeader,
+            NoLoggingStatusForKey,
+            NoSuchBucket,
+            NoSuchBucketPolicy,
+            NoSuchKey,
+            NoSuchLifecycleConfiguration,
+            NoSuchUpload,
+            NoSuchVersion,
+            NotImplemented,
+            NotSignedUp,
+            OperationAborted,
+            PermanentRedirect,
+            PreconditionFailed,
+            Redirect,
+            RestoreAlreadyInProgress,
+            RequestIsNotMultiPartContent,
+            RequestTimeout,
+            RequestTimeTooSkewed,
+            RequestTorrentOfBucketError,
+            ServerSideEncryptionConfigurationNotFoundError,
+            ServiceUnavailable,
+            SignatureDoesNotMatch,
+            SlowDown,
+            TemporaryRedirect,
+            TokenRefreshRequired,
+            TooManyBuckets,
+            UnexpectedContent,
+            UnresolvableGrantByEmailAddress,
+            UserKeyMustBeSpecified,
+        ]
+    }
 }
