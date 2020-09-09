@@ -1,5 +1,6 @@
 //! Generic S3 service which wraps a S3 storage
 
+use crate::header::names::{X_AMZ_MFA, X_AMZ_REQUEST_PAYER};
 use crate::path::S3Path;
 use crate::query::GetQuery;
 use crate::storage::S3Storage;
@@ -138,14 +139,14 @@ async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> S3Result<T> {
 }
 
 macro_rules! assign_opt{
-    (from $src:tt to $dst:tt with fields [$($field: tt,)+])=>{$(
+    (from $src:tt to $dst:tt fields [$($field: tt,)+])=>{$(
         if $src.$field.is_some(){
             $dst.$field = $src.$field;
         }
     )+};
 
     (from $req:tt header $name:tt to $dst:tt field $field:tt) => {{
-        if let Some(s) = $req.get_header_str($name).map_err(|e|S3Error::InvalidRequest(e.into()))? {
+        if let Some(s) = $req.get_header_str($name.as_str()).map_err(|e|S3Error::InvalidRequest(e.into()))? {
             $dst.$field = Some(s.into());
         }
     }};
@@ -217,7 +218,7 @@ where
                                 ..ListObjectsRequest::default()
                             };
 
-                            assign_opt!(from query to input with fields [
+                            assign_opt!(from query to input fields [
                                 delimiter,
                                 encoding_type,
                                 marker,
@@ -225,12 +226,7 @@ where
                                 prefix,
                             ]);
 
-                            if let Some(payer) = req
-                                .get_header_str("x-amz-request-payer")
-                                .map_err(|e| S3Error::InvalidRequest(e.into()))?
-                            {
-                                input.request_payer = Some(payer.to_owned());
-                            }
+                            assign_opt!(from req header X_AMZ_REQUEST_PAYER to input field request_payer);
 
                             self.storage.list_objects(input).await.try_into_response()
                         }
@@ -240,7 +236,7 @@ where
                                 ..ListObjectsV2Request::default()
                             };
 
-                            assign_opt!(from query to input with fields [
+                            assign_opt!(from query to input fields [
                                 continuation_token,
                                 delimiter,
                                 encoding_type,
@@ -250,7 +246,7 @@ where
                                 start_after,
                             ]);
 
-                            assign_opt!(from req header "x-amz-request-payer" to input field request_payer);
+                            assign_opt!(from req header X_AMZ_REQUEST_PAYER to input field request_payer);
 
                             self.storage
                                 .list_objects_v2(input)
@@ -288,8 +284,8 @@ where
                                 bucket: bucket.into(),
                                 ..dto::DeleteObjectsRequest::default()
                             };
-                            assign_opt!(from req header "x-amz-mfa" to input field mfa);
-                            assign_opt!(from req header "x-amz-request-payer" to input field request_payer);
+                            assign_opt!(from req header X_AMZ_MFA to input field mfa);
+                            assign_opt!(from req header X_AMZ_REQUEST_PAYER to input field request_payer);
                             // TODO: handle "x-amz-bypass-governance-retention"
                             self.storage.delete_objects(input).await.try_into_response()
                         } else {

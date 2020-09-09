@@ -1,9 +1,12 @@
 #![allow(dead_code)] // TODO: remove this
+#![allow(missing_copy_implementations)]
 
 //! Common Request Headers
 
 use crate::utils::{is_sha256_checksum, Apply};
 
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
 
@@ -82,8 +85,6 @@ pub(super) struct CredentialV4<'a> {
     aws_region: &'a str,
     /// <aws-service> value is `s3` when sending request to Amazon S3.
     aws_service: &'a str,
-    /// aws4_request
-    aws4_request: (),
 }
 
 /// `ParseAuthorizationError`
@@ -172,7 +173,6 @@ impl<'a> AuthorizationV4<'a> {
                     date,
                     aws_region,
                     aws_service,
-                    aws4_request: (),
                 },
                 signed_headers: headers.into_vec(),
                 signature,
@@ -184,6 +184,79 @@ impl<'a> AuthorizationV4<'a> {
         match parse(auth) {
             Ok((_, ans)) => Ok(ans),
             Err(_) => Err(ParseAuthorizationError { _priv: () }),
+        }
+    }
+}
+
+/// `ParseCopySourceError`
+#[derive(Debug, thiserror::Error)]
+#[error("ParseCopySourceError")]
+pub struct ParseCopySourceError {
+    /// priv place holder
+    _priv: (),
+}
+
+/// x-amz-copy-source
+#[derive(Debug)]
+pub enum CopySource<'a> {
+    /// bucket repr
+    Bucket {
+        /// bucket
+        bucket: &'a str,
+        /// key
+        key: &'a str,
+    },
+    /// access point repr
+    AccessPoint {
+        /// region
+        region: &'a str,
+        /// account id
+        account_id: &'a str,
+        /// access point name
+        access_point_name: &'a str,
+        /// key
+        key: &'a str,
+    },
+}
+
+#[allow(clippy::unwrap_used)] // for regex
+impl<'a> CopySource<'a> {
+    /// check header pattern
+    /// # Errors
+    /// Returns an error if the header does not match the pattern
+    pub fn try_match(header: &str) -> Result<(), ParseCopySourceError> {
+        /// x-amz-copy-source header pattern
+        static PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(".+?/.+").unwrap());
+        let pattern: &Regex = &*PATTERN;
+        if pattern.is_match(header) {
+            Ok(())
+        } else {
+            Err(ParseCopySourceError { _priv: () })
+        }
+    }
+
+    /// parse `CopySource` from header
+    /// # Errors
+    /// Returns an error if the header is invalid
+    pub fn from_header_str(header: &'a str) -> Result<Self, ParseCopySourceError> {
+        /// bucket pattern
+        static PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new("^(.+?)/(.+)$").unwrap());
+
+        // TODO: support access point
+        // TODO: use nom parser
+
+        let pattern: &Regex = &*PATTERN;
+        match pattern.captures(header) {
+            None => Err(ParseCopySourceError { _priv: () }),
+            Some(captures) => {
+                let bucket = captures.get(1).unwrap().as_str();
+                let key = captures.get(2).unwrap().as_str();
+                if crate::path::check_bucket_name(bucket) && crate::path::check_key(key) {
+                    Ok(Self::Bucket { bucket, key })
+                } else {
+                    Err(ParseCopySourceError { _priv: () })
+                }
+            }
         }
     }
 }
@@ -223,4 +296,134 @@ mod tests {
             assert!(matches!(AuthorizationV4::from_header_str(auth), Err(_)));
         }
     }
+}
+
+pub mod names {
+    //! Amz header names
+
+    // TODO: declare const headers, see <https://github.com/hyperium/http/issues/264>
+
+    use hyper::header::HeaderName;
+    use once_cell::sync::Lazy;
+
+    macro_rules! declare_header_name{
+        [$($(#[$docs:meta])* $n:ident: $s:expr,)+] => {
+            $(
+                $(#[$docs])*
+                pub static $n: Lazy<HeaderName> = Lazy::new(||HeaderName::from_static($s));
+            )+
+
+            #[cfg(test)]
+            #[test]
+            fn check_headers(){
+                $(
+                    dbg!(&*$n);
+                )+
+            }
+        }
+    }
+
+    declare_header_name![
+        /// x-amz-mfa
+        X_AMZ_MFA: "x-amz-mfa",
+
+        /// x-amz-content-sha256
+        X_AMZ_CONTENT_SHA_256: "x-amz-content-sha256",
+
+        /// x-amz-expiration
+        X_AMZ_EXPIRATION: "x-amz-expiration",
+
+        /// x-amz-copy-source-version-id
+        X_AMZ_COPY_SOURCE_VERSION_ID: "x-amz-copy-source-version-id",
+
+        /// x-amz-version-id
+        X_AMZ_VERSION_ID: "x-amz-version-id",
+
+        /// x-amz-request-charged
+        X_AMZ_REQUEST_CHARGED: "x-amz-request-charged",
+
+        /// x-amz-acl
+        X_AMZ_ACL: "x-amz-acl",
+
+        /// x-amz-copy-source
+        X_AMZ_COPY_SOURCE: "x-amz-copy-source",
+
+        /// x-amz-copy-source-if-match
+        X_AMZ_COPY_SOURCE_IF_MATCH: "x-amz-copy-source-if-match",
+
+        /// x-amz-copy-source-if-modified-since
+        X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE: "x-amz-copy-source-if-modified-since",
+
+        /// x-amz-copy-source-if-none-match
+        X_AMZ_COPY_SOURCE_IF_NONE_MATCH: "x-amz-copy-source-if-none-match",
+
+        /// x-amz-copy-source-if-unmodified-since
+        X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE: "x-amz-copy-source-if-unmodified-since",
+
+        /// x-amz-grant-full-control
+        X_AMZ_GRANT_FULL_CONTROL: "x-amz-grant-full-control",
+
+        /// x-amz-grant-read
+        X_AMZ_GRANT_READ: "x-amz-grant-read",
+
+        /// x-amz-grant-read-acp
+        X_AMZ_GRANT_READ_ACP: "x-amz-grant-read-acp",
+
+        /// x-amz-grant-write-acp
+        X_AMZ_GRANT_WRITE_ACP: "x-amz-grant-write-acp",
+
+        /// x-amz-metadata-directive
+        X_AMZ_METADATA_DIRECTIVE: "x-amz-metadata-directive",
+
+        /// x-amz-tagging-directive
+        X_AMZ_TAGGING_DIRECTIVE: "x-amz-tagging-directive",
+
+        /// x-amz-server-side-encryption
+        X_AMZ_SERVER_SIDE_ENCRYPTION: "x-amz-server-side-encryption",
+
+        /// x-amz-storage-class
+        X_AMZ_STORAGE_CLASS: "x-amz-storage-class",
+
+        /// x-amz-website-redirect-location
+        X_AMZ_WEBSITE_REDIRECT_LOCATION: "x-amz-website-redirect-location",
+
+        /// x-amz-server-side-encryption-customer-algorithm
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM: "x-amz-server-side-encryption-customer-algorithm",
+
+        /// x-amz-server-side-encryption-customer-key
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY: "x-amz-server-side-encryption-customer-key",
+
+        /// x-amz-server-side-encryption-customer-key-MD5
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5: "x-amz-server-side-encryption-customer-key-md5",
+
+        /// x-amz-server-side-encryption-aws-kms-key-id
+        X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID: "x-amz-server-side-encryption-aws-kms-key-id",
+
+        /// x-amz-server-side-encryption-context
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT: "x-amz-server-side-encryption-context",
+
+        /// x-amz-copy-source-server-side-encryption-customer-algorithm
+        X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM: "x-amz-copy-source-server-side-encryption-customer-algorithm",
+
+        /// x-amz-copy-source-server-side-encryption-customer-key
+        X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY: "x-amz-copy-source-server-side-encryption-customer-key",
+
+        /// x-amz-copy-source-server-side-encryption-customer-key-MD5
+        X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5: "x-amz-copy-source-server-side-encryption-customer-key-md5",
+
+        /// x-amz-request-payer
+        X_AMZ_REQUEST_PAYER: "x-amz-request-payer",
+
+        /// x-amz-tagging
+        X_AMZ_TAGGING: "x-amz-tagging",
+
+        /// x-amz-object-lock-mode
+        X_AMZ_OBJECT_LOCK_MODE: "x-amz-object-lock-mode",
+
+        /// x-amz-object-lock-retain-until-date
+        X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE: "x-amz-object-lock-retain-until-date",
+
+        /// x-amz-object-lock-legal-hold
+        X_AMZ_OBJECT_LOCK_LEGAL_HOLD: "x-amz-object-lock-legal-hold",
+    ];
 }
