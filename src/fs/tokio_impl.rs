@@ -1,16 +1,9 @@
 //! fs implementation based on `tokio`
 
-use crate::dto::{
-    self, Bucket, CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
-    DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
-    GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest, GetObjectError,
-    GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput, HeadBucketRequest,
-    HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput,
-    ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
-    ListObjectsV2Output, ListObjectsV2Request, Object, PutObjectError, PutObjectOutput,
-    PutObjectRequest,
-};
+#![allow(clippy::wildcard_imports)]
+
+use crate::dto::{self, *};
+
 use crate::{
     error::{S3Error, S3Result},
     path::check_bucket_name,
@@ -107,11 +100,49 @@ impl S3Storage for FileSystem {
         })
         .await
     }
+
+    async fn copy_object(
+        &self,
+        input: CopyObjectRequest,
+    ) -> S3Result<CopyObjectOutput, CopyObjectError> {
+        use crate::header::CopySource;
+
+        let copy_source = CopySource::from_header_str(&input.copy_source)
+            .map_err(|e| S3Error::InvalidRequest(e.into()))?;
+
+        match copy_source {
+            CopySource::AccessPoint { .. } => Err(S3Error::NotSupported),
+            CopySource::Bucket { bucket, key } => {
+                wrap_storage(async {
+                    let src_path = self.get_object_path(bucket, key)?;
+                    let dst_path = self.get_object_path(&input.bucket, &input.key)?;
+
+                    let metadata = tokio::fs::metadata(&src_path).await?;
+                    let last_modified = time::to_rfc3339(metadata.modified()?);
+
+                    let _ = tokio::fs::copy(src_path, dst_path).await?;
+
+                    let output = CopyObjectOutput {
+                        copy_object_result: CopyObjectResult {
+                            e_tag: None,
+                            last_modified: Some(last_modified),
+                        }
+                        .apply(Some),
+                        ..CopyObjectOutput::default()
+                    };
+
+                    Ok(Ok(output))
+                })
+                .await
+            }
+        }
+    }
+
     async fn delete_bucket(
         &self,
         input: DeleteBucketRequest,
     ) -> S3Result<DeleteBucketOutput, DeleteBucketError> {
-        wrap_storage(async move {
+        wrap_storage(async {
             let path = self.get_bucket_path(&input.bucket)?;
             tokio::fs::remove_dir_all(path).await?;
             Ok(Ok(DeleteBucketOutput))
@@ -149,10 +180,10 @@ impl S3Storage for FileSystem {
                 }
             }
 
-            let mut deleted: Vec<dto::DeletedObject> = Vec::new();
+            let mut deleted: Vec<DeletedObject> = Vec::new();
             for (path, key) in objects {
                 tokio::fs::remove_file(path).await?;
-                deleted.push(dto::DeletedObject {
+                deleted.push(DeletedObject {
                     key: Some(key),
                     ..dto::DeletedObject::default()
                 });

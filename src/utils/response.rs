@@ -19,9 +19,6 @@ pub trait ResponseExt {
         value: Option<String>,
     ) -> Result<(), InvalidHeaderValue>;
 
-    /// set optional `Last-Modified`
-    fn set_opt_last_modified(&mut self, time: Option<String>) -> Result<(), InvalidHeaderValue>;
-
     /// set `Content-Type` by mime
     fn set_mime(&mut self, mime: &Mime) -> Result<(), InvalidHeaderValue>;
 }
@@ -43,10 +40,6 @@ impl ResponseExt for Response {
             let _ = self.headers_mut().insert(name, val);
         }
         Ok(())
-    }
-
-    fn set_opt_last_modified(&mut self, time: Option<String>) -> Result<(), InvalidHeaderValue> {
-        self.set_opt_header(header::LAST_MODIFIED, time)
     }
 
     fn set_mime(&mut self, mime: &Mime) -> Result<(), InvalidHeaderValue> {

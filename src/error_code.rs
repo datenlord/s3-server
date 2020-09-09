@@ -209,6 +209,9 @@ pub enum S3ErrorCode {
     /// Your account is not signed up for the Amazon S3 service. You must sign up before you can use Amazon S3.
     NotSignedUp,
 
+    /// The source object of the COPY operation is not in the active tier and is only stored in Amazon S3 Glacier.
+    ObjectNotInActiveTierError,
+
     /// A conflicting conditional operation is currently in progress against this resource. Try again.
     OperationAborted,
 
@@ -343,6 +346,7 @@ impl S3ErrorCode {
             Self::NoSuchVersion => Some(StatusCode::NOT_FOUND),
             Self::NotImplemented => Some(StatusCode::NOT_IMPLEMENTED),
             Self::NotSignedUp => Some(StatusCode::FORBIDDEN),
+            Self::ObjectNotInActiveTierError => Some(StatusCode::OK),
             Self::OperationAborted => Some(StatusCode::CONFLICT),
             Self::PermanentRedirect => Some(StatusCode::MOVED_PERMANENTLY),
             Self::PreconditionFailed => Some(StatusCode::PRECONDITION_FAILED),
@@ -442,6 +446,7 @@ impl S3ErrorCode {
             NoSuchVersion,
             NotImplemented,
             NotSignedUp,
+            ObjectNotInActiveTierError,
             OperationAborted,
             PermanentRedirect,
             PreconditionFailed,

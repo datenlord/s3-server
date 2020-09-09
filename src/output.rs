@@ -56,7 +56,7 @@ fn wrap_output(f: impl FnOnce(&mut Response) -> Result<(), BoxStdError>) -> S3Re
 }
 
 /// set xml body
-fn set_xml_body<F>(res: &mut Response, f: F, cap: usize) -> Result<(), BoxStdError>
+fn set_xml_body<F>(res: &mut Response, cap: usize, f: F) -> Result<(), BoxStdError>
 where
     F: FnOnce(&mut EventWriter<&mut Vec<u8>>) -> Result<(), xml::writer::Error>,
 {
@@ -92,10 +92,10 @@ struct XmlErrorResponse {
 
 impl XmlErrorResponse {
     /// Constructs a `XmlErrorResponse`
-    const fn from_code_msg(code: S3ErrorCode, message: Option<String>) -> Self {
+    const fn from_code_msg(code: S3ErrorCode, message: String) -> Self {
         Self {
             code,
-            message,
+            message: Some(message),
             resource: None,
             request_id: None,
         }
@@ -112,22 +112,82 @@ impl S3Output for XmlErrorResponse {
 
             *res.status_mut() = status;
 
-            set_xml_body(
-                res,
-                |w| {
-                    w.stack("Error", |w| {
-                        w.element("Code", self.code.as_static_str())?;
-                        w.opt_element("Message", self.message)?;
-                        w.opt_element("Resource", self.resource)?;
-                        w.opt_element("RequestId", self.request_id)?;
-                        Ok(())
-                    })
-                },
-                64,
-            )?;
+            set_xml_body(res, 64, |w| {
+                w.stack("Error", |w| {
+                    w.element("Code", self.code.as_static_str())?;
+                    w.opt_element("Message", self.message)?;
+                    w.opt_element("Resource", self.resource)?;
+                    w.opt_element("RequestId", self.request_id)?;
+                    Ok(())
+                })
+            })?;
 
             Ok(())
         })
+    }
+}
+
+mod copy_object {
+    //! [`CopyObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html)
+
+    use super::*;
+    use crate::dto::{CopyObjectError, CopyObjectOutput};
+    use crate::header::names::*;
+
+    impl S3Output for CopyObjectOutput {
+        fn try_into_response(self) -> S3Result<Response> {
+            wrap_output(|res| {
+                res.set_opt_header(X_AMZ_EXPIRATION.clone(), self.expiration)?;
+                res.set_opt_header(
+                    X_AMZ_COPY_SOURCE_VERSION_ID.clone(),
+                    self.copy_source_version_id,
+                )?;
+                res.set_opt_header(X_AMZ_VERSION_ID.clone(), self.version_id)?;
+                res.set_opt_header(
+                    X_AMZ_SERVER_SIDE_ENCRYPTION.clone(),
+                    self.server_side_encryption,
+                )?;
+                res.set_opt_header(
+                    X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM.clone(),
+                    self.sse_customer_algorithm,
+                )?;
+                res.set_opt_header(
+                    X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5.clone(),
+                    self.sse_customer_key_md5,
+                )?;
+                res.set_opt_header(
+                    X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID.clone(),
+                    self.ssekms_key_id,
+                )?;
+                res.set_opt_header(
+                    X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT.clone(),
+                    self.ssekms_encryption_context,
+                )?;
+                res.set_opt_header(X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
+
+                let copy_object_result = self.copy_object_result;
+
+                set_xml_body(res, 64, |w| {
+                    w.opt_stack("CopyObjectResult", copy_object_result, |w, result| {
+                        w.opt_element("ETag", result.e_tag)?;
+                        w.opt_element("LastModified", result.last_modified)
+                    })
+                })?;
+
+                Ok(())
+            })
+        }
+    }
+
+    impl S3Output for CopyObjectError {
+        fn try_into_response(self) -> S3Result<Response> {
+            match self {
+                Self::ObjectNotInActiveTierError(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::ObjectNotInActiveTierError, msg)
+                }
+            }
+            .try_into_response()
+        }
     }
 }
 
@@ -150,12 +210,11 @@ mod create_bucket {
         fn try_into_response(self) -> S3Result<Response> {
             let resp = match self {
                 Self::BucketAlreadyExists(msg) => {
-                    XmlErrorResponse::from_code_msg(S3ErrorCode::BucketAlreadyExists, msg.into())
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::BucketAlreadyExists, msg)
                 }
-                Self::BucketAlreadyOwnedByYou(msg) => XmlErrorResponse::from_code_msg(
-                    S3ErrorCode::BucketAlreadyOwnedByYou,
-                    msg.into(),
-                ),
+                Self::BucketAlreadyOwnedByYou(msg) => {
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::BucketAlreadyOwnedByYou, msg)
+                }
             };
             resp.try_into_response()
         }
@@ -206,58 +265,51 @@ mod delete_object {
 mod delete_objects {
     //! [`DeleteObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html)
 
-    use header::HeaderName;
-
     use super::*;
     use crate::dto::{DeleteObjectsError, DeleteObjectsOutput};
+    use crate::header::names::X_AMZ_REQUEST_CHARGED;
 
     impl S3Output for DeleteObjectsOutput {
-        fn try_into_response(mut self) -> S3Result<Response> {
+        fn try_into_response(self) -> S3Result<Response> {
             wrap_output(|res| {
-                let request_charged = self.request_charged.take();
+                res.set_opt_header(X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
 
-                res.set_opt_header(
-                    HeaderName::from_static("x-amz-request-charged"),
-                    request_charged,
-                )?;
+                let deleted = self.deleted;
+                let errors = self.errors;
 
-                set_xml_body(
-                    res,
-                    |w| {
-                        w.stack("DeleteResult", |w| {
-                            if let Some(deleted) = self.deleted {
-                                w.iter_element(deleted.into_iter(), |w, deleted_object| {
-                                    w.stack("Deleted", |w| {
-                                        w.opt_element(
-                                            "DeleteMarker",
-                                            deleted_object.delete_marker.map(|b| b.to_string()),
-                                        )?;
-                                        w.opt_element(
-                                            "DeleteMarkerVersionId",
-                                            deleted_object.delete_marker_version_id,
-                                        )?;
-                                        w.opt_element("Key", deleted_object.key)?;
-                                        w.opt_element("VersionId", deleted_object.version_id)?;
-                                        Ok(())
-                                    })
-                                })?;
-                            }
-                            if let Some(errors) = self.errors {
-                                w.iter_element(errors.into_iter(), |w, error| {
-                                    w.stack("Error", |w| {
-                                        w.opt_element("Code", error.code)?;
-                                        w.opt_element("Key", error.key)?;
-                                        w.opt_element("Message", error.message)?;
-                                        w.opt_element("VersionId", error.version_id)?;
-                                        Ok(())
-                                    })
-                                })?;
-                            }
-                            Ok(())
-                        })
-                    },
-                    4096,
-                )?;
+                set_xml_body(res, 4096, |w| {
+                    w.stack("DeleteResult", |w| {
+                        if let Some(deleted) = deleted {
+                            w.iter_element(deleted.into_iter(), |w, deleted_object| {
+                                w.stack("Deleted", |w| {
+                                    w.opt_element(
+                                        "DeleteMarker",
+                                        deleted_object.delete_marker.map(|b| b.to_string()),
+                                    )?;
+                                    w.opt_element(
+                                        "DeleteMarkerVersionId",
+                                        deleted_object.delete_marker_version_id,
+                                    )?;
+                                    w.opt_element("Key", deleted_object.key)?;
+                                    w.opt_element("VersionId", deleted_object.version_id)?;
+                                    Ok(())
+                                })
+                            })?;
+                        }
+                        if let Some(errors) = errors {
+                            w.iter_element(errors.into_iter(), |w, error| {
+                                w.stack("Error", |w| {
+                                    w.opt_element("Code", error.code)?;
+                                    w.opt_element("Key", error.key)?;
+                                    w.opt_element("Message", error.message)?;
+                                    w.opt_element("VersionId", error.version_id)?;
+                                    Ok(())
+                                })
+                            })?;
+                        }
+                        Ok(())
+                    })
+                })?;
 
                 Ok(())
             })
@@ -289,9 +341,10 @@ mod get_object {
                 )?;
                 res.set_opt_header(header::CONTENT_TYPE, self.content_type)?;
 
-                res.set_opt_last_modified(time::map_opt_rfc3339_to_last_modified(
-                    self.last_modified,
-                )?)?;
+                res.set_opt_header(
+                    header::LAST_MODIFIED,
+                    time::map_opt_rfc3339_to_last_modified(self.last_modified)?,
+                )?;
                 // TODO: handle other fields
                 Ok(())
             })
@@ -302,7 +355,7 @@ mod get_object {
         fn try_into_response(self) -> S3Result<Response> {
             let resp = match self {
                 Self::NoSuchKey(msg) => {
-                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchKey, msg.into())
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchKey, msg)
                 }
             };
             resp.try_into_response()
@@ -319,16 +372,12 @@ mod get_bucket_location {
     impl S3Output for GetBucketLocationOutput {
         fn try_into_response(self) -> S3Result<Response> {
             wrap_output(|res| {
-                set_xml_body(
-                    res,
-                    |w| {
-                        w.element(
-                            "LocationConstraint",
-                            self.location_constraint.as_deref().unwrap_or(""),
-                        )
-                    },
-                    4096,
-                )
+                set_xml_body(res, 4096, |w| {
+                    w.element(
+                        "LocationConstraint",
+                        self.location_constraint.as_deref().unwrap_or(""),
+                    )
+                })
             })
         }
     }
@@ -356,7 +405,7 @@ mod head_bucket {
         fn try_into_response(self) -> S3Result<Response> {
             let resp = match self {
                 Self::NoSuchBucket(msg) => {
-                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg.into())
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg)
                 }
             };
             resp.try_into_response()
@@ -378,9 +427,10 @@ mod head_object {
                     header::CONTENT_LENGTH,
                     self.content_length.map(|l| l.to_string()),
                 )?;
-                res.set_opt_last_modified(time::map_opt_rfc3339_to_last_modified(
-                    self.last_modified,
-                )?)?;
+                res.set_opt_header(
+                    header::LAST_MODIFIED,
+                    time::map_opt_rfc3339_to_last_modified(self.last_modified)?,
+                )?;
                 res.set_opt_header(header::ETAG, self.e_tag)?;
                 res.set_opt_header(header::EXPIRES, self.expires)?;
                 // TODO: handle other fields
@@ -393,7 +443,7 @@ mod head_object {
         fn try_into_response(self) -> S3Result<Response> {
             let resp = match self {
                 Self::NoSuchKey(msg) => {
-                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchKey, msg.into())
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchKey, msg)
                 }
             };
             resp.try_into_response()
@@ -410,29 +460,25 @@ mod list_buckets {
     impl S3Output for ListBucketsOutput {
         fn try_into_response(self) -> S3Result<Response> {
             wrap_output(|res| {
-                set_xml_body(
-                    res,
-                    |w| {
-                        w.stack("ListBucketsOutput", |w| {
-                            w.opt_stack("Buckets", self.buckets, |w, buckets| {
-                                for bucket in buckets {
-                                    w.stack("Bucket", |w| {
-                                        w.opt_element("CreationDate", bucket.creation_date)?;
-                                        w.opt_element("Name", bucket.name)
-                                    })?;
-                                }
-                                Ok(())
-                            })?;
-
-                            w.opt_stack("Owner", self.owner, |w, owner| {
-                                w.opt_element("DisplayName", owner.display_name)?;
-                                w.opt_element("ID", owner.id)
-                            })?;
+                set_xml_body(res, 4096, |w| {
+                    w.stack("ListBucketsOutput", |w| {
+                        w.opt_stack("Buckets", self.buckets, |w, buckets| {
+                            for bucket in buckets {
+                                w.stack("Bucket", |w| {
+                                    w.opt_element("CreationDate", bucket.creation_date)?;
+                                    w.opt_element("Name", bucket.name)
+                                })?;
+                            }
                             Ok(())
-                        })
-                    },
-                    4096,
-                )
+                        })?;
+
+                        w.opt_stack("Owner", self.owner, |w, owner| {
+                            w.opt_element("DisplayName", owner.display_name)?;
+                            w.opt_element("ID", owner.id)
+                        })?;
+                        Ok(())
+                    })
+                })
             })
         }
     }
@@ -454,7 +500,7 @@ mod list_objects {
         fn try_into_response(self) -> S3Result<Response> {
             let resp = match self {
                 Self::NoSuchBucket(msg) => {
-                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg.into())
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg)
                 }
             };
             resp.try_into_response()
@@ -464,44 +510,40 @@ mod list_objects {
     impl S3Output for ListObjectsOutput {
         fn try_into_response(self) -> S3Result<Response> {
             wrap_output(|res| {
-                set_xml_body(
-                    res,
-                    |w| {
-                        w.stack("ListBucketResult", |w| {
-                            w.opt_element("IsTruncated", self.is_truncated.map(|b| b.to_string()))?;
-                            w.opt_element("Marker", self.marker)?;
-                            w.opt_element("NextMarker", self.next_marker)?;
-                            if let Some(contents) = self.contents {
-                                for content in contents {
-                                    w.stack("Contents", |w| {
-                                        w.opt_element("Key", content.key)?;
-                                        w.opt_element("LastModified", content.last_modified)?;
-                                        w.opt_element("ETag", content.e_tag)?;
-                                        w.opt_element("Size", content.size.map(|s| s.to_string()))?;
-                                        w.opt_element("StorageClass", content.storage_class)?;
-                                        w.opt_stack("Owner", content.owner, |w, owner| {
-                                            w.opt_element("ID", owner.id)?;
-                                            w.opt_element("DisplayName", owner.display_name)?;
-                                            Ok(())
-                                        })
-                                    })?;
-                                }
+                set_xml_body(res, 4096, |w| {
+                    w.stack("ListBucketResult", |w| {
+                        w.opt_element("IsTruncated", self.is_truncated.map(|b| b.to_string()))?;
+                        w.opt_element("Marker", self.marker)?;
+                        w.opt_element("NextMarker", self.next_marker)?;
+                        if let Some(contents) = self.contents {
+                            for content in contents {
+                                w.stack("Contents", |w| {
+                                    w.opt_element("Key", content.key)?;
+                                    w.opt_element("LastModified", content.last_modified)?;
+                                    w.opt_element("ETag", content.e_tag)?;
+                                    w.opt_element("Size", content.size.map(|s| s.to_string()))?;
+                                    w.opt_element("StorageClass", content.storage_class)?;
+                                    w.opt_stack("Owner", content.owner, |w, owner| {
+                                        w.opt_element("ID", owner.id)?;
+                                        w.opt_element("DisplayName", owner.display_name)?;
+                                        Ok(())
+                                    })
+                                })?;
                             }
-                            w.opt_element("Name", self.name)?;
-                            w.opt_element("Prefix", self.prefix)?;
-                            w.opt_element("Delimiter", self.delimiter)?;
-                            w.opt_element("MaxKeys", self.max_keys.map(|k| k.to_string()))?;
-                            w.opt_stack("CommonPrefixes", self.common_prefixes, |w, prefixes| {
-                                w.iter_element(prefixes.into_iter(), |w, common_prefix| {
-                                    w.opt_element("Prefix", common_prefix.prefix)
-                                })
-                            })?;
-                            w.opt_element("EncodingType", self.encoding_type)?;
-                            Ok(())
-                        })
-                    },
-                    4096,
-                )
+                        }
+                        w.opt_element("Name", self.name)?;
+                        w.opt_element("Prefix", self.prefix)?;
+                        w.opt_element("Delimiter", self.delimiter)?;
+                        w.opt_element("MaxKeys", self.max_keys.map(|k| k.to_string()))?;
+                        w.opt_stack("CommonPrefixes", self.common_prefixes, |w, prefixes| {
+                            w.iter_element(prefixes.into_iter(), |w, common_prefix| {
+                                w.opt_element("Prefix", common_prefix.prefix)
+                            })
+                        })?;
+                        w.opt_element("EncodingType", self.encoding_type)?;
+                        Ok(())
+                    })
+                })
             })
         }
     }
@@ -517,7 +559,7 @@ mod list_objects_v2 {
         fn try_into_response(self) -> S3Result<Response> {
             let resp = match self {
                 Self::NoSuchBucket(msg) => {
-                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg.into())
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg)
                 }
             };
             resp.try_into_response()
@@ -527,46 +569,42 @@ mod list_objects_v2 {
     impl S3Output for ListObjectsV2Output {
         fn try_into_response(self) -> S3Result<Response> {
             wrap_output(|res| {
-                set_xml_body(
-                    res,
-                    |w| {
-                        w.stack("ListBucketResult", |w| {
-                            w.opt_element("IsTruncated", self.is_truncated.map(|b| b.to_string()))?;
-                            if let Some(contents) = self.contents {
-                                for content in contents {
-                                    w.stack("Contents", |w| {
-                                        w.opt_element("Key", content.key)?;
-                                        w.opt_element("LastModified", content.last_modified)?;
-                                        w.opt_element("ETag", content.e_tag)?;
-                                        w.opt_element("Size", content.size.map(|s| s.to_string()))?;
-                                        w.opt_element("StorageClass", content.storage_class)?;
-                                        w.opt_stack("Owner", content.owner, |w, owner| {
-                                            w.opt_element("ID", owner.id)?;
-                                            w.opt_element("DisplayName", owner.display_name)?;
-                                            Ok(())
-                                        })
-                                    })?;
-                                }
+                set_xml_body(res, 4096, |w| {
+                    w.stack("ListBucketResult", |w| {
+                        w.opt_element("IsTruncated", self.is_truncated.map(|b| b.to_string()))?;
+                        if let Some(contents) = self.contents {
+                            for content in contents {
+                                w.stack("Contents", |w| {
+                                    w.opt_element("Key", content.key)?;
+                                    w.opt_element("LastModified", content.last_modified)?;
+                                    w.opt_element("ETag", content.e_tag)?;
+                                    w.opt_element("Size", content.size.map(|s| s.to_string()))?;
+                                    w.opt_element("StorageClass", content.storage_class)?;
+                                    w.opt_stack("Owner", content.owner, |w, owner| {
+                                        w.opt_element("ID", owner.id)?;
+                                        w.opt_element("DisplayName", owner.display_name)?;
+                                        Ok(())
+                                    })
+                                })?;
                             }
-                            w.opt_element("Name", self.name)?;
-                            w.opt_element("Prefix", self.prefix)?;
-                            w.opt_element("Delimiter", self.delimiter)?;
-                            w.opt_element("MaxKeys", self.max_keys.map(|k| k.to_string()))?;
-                            w.opt_stack("CommonPrefixes", self.common_prefixes, |w, prefixes| {
-                                w.iter_element(prefixes.into_iter(), |w, common_prefix| {
-                                    w.opt_element("Prefix", common_prefix.prefix)
-                                })
-                            })?;
-                            w.opt_element("EncodingType", self.encoding_type)?;
-                            w.opt_element("KeyCount", self.max_keys.map(|k| k.to_string()))?;
-                            w.opt_element("ContinuationToken", self.continuation_token)?;
-                            w.opt_element("NextContinuationToken", self.next_continuation_token)?;
-                            w.opt_element("StartAfter", self.start_after)?;
-                            Ok(())
-                        })
-                    },
-                    4096,
-                )
+                        }
+                        w.opt_element("Name", self.name)?;
+                        w.opt_element("Prefix", self.prefix)?;
+                        w.opt_element("Delimiter", self.delimiter)?;
+                        w.opt_element("MaxKeys", self.max_keys.map(|k| k.to_string()))?;
+                        w.opt_stack("CommonPrefixes", self.common_prefixes, |w, prefixes| {
+                            w.iter_element(prefixes.into_iter(), |w, common_prefix| {
+                                w.opt_element("Prefix", common_prefix.prefix)
+                            })
+                        })?;
+                        w.opt_element("EncodingType", self.encoding_type)?;
+                        w.opt_element("KeyCount", self.max_keys.map(|k| k.to_string()))?;
+                        w.opt_element("ContinuationToken", self.continuation_token)?;
+                        w.opt_element("NextContinuationToken", self.next_continuation_token)?;
+                        w.opt_element("StartAfter", self.start_after)?;
+                        Ok(())
+                    })
+                })
             })
         }
     }

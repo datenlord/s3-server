@@ -1,22 +1,20 @@
 //! Generic S3 service which wraps a S3 storage
 
-use crate::header::names::{X_AMZ_MFA, X_AMZ_REQUEST_PAYER};
+#![allow(clippy::wildcard_imports)]
+
+use crate::dto::*;
+use crate::header::names::*;
+use hyper::header::*;
+
 use crate::path::S3Path;
 use crate::query::GetQuery;
 use crate::storage::S3Storage;
 use crate::utils::Apply;
+use crate::utils::RequestExt;
 use crate::{
     dto,
     error::{S3Error, S3Result},
     BoxStdError,
-};
-use crate::{
-    dto::{
-        CreateBucketRequest, DeleteBucketRequest, DeleteObjectRequest, GetBucketLocationRequest,
-        GetObjectRequest, HeadBucketRequest, HeadObjectRequest, ListObjectsRequest,
-        ListObjectsV2Request, PutObjectRequest,
-    },
-    utils::RequestExt,
 };
 use crate::{output::S3Output, query::PostQuery};
 use crate::{Request, Response};
@@ -128,6 +126,14 @@ fn extract_query<Q: DeserializeOwned>(req: &Request) -> S3Result<Option<Q>> {
     .apply(Ok)
 }
 
+/// extract header
+fn extract_header(req: &Request, name: impl AsHeaderName) -> S3Result<Option<&str>> {
+    match req.get_header_str(name) {
+        Ok(s) => s.apply(Ok),
+        Err(e) => S3Error::InvalidRequest(e.into()).apply(Err),
+    }
+}
+
 /// deserialize xml body
 async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> S3Result<T> {
     wrap_handle(async move {
@@ -139,17 +145,19 @@ async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> S3Result<T> {
 }
 
 macro_rules! assign_opt{
-    (from $src:tt to $dst:tt fields [$($field: tt,)+])=>{$(
+    (from $src:ident to $dst:ident: fields [$($field: tt,)+])=>{$(
         if $src.$field.is_some(){
             $dst.$field = $src.$field;
         }
     )+};
 
-    (from $req:tt header $name:tt to $dst:tt field $field:tt) => {{
-        if let Some(s) = $req.get_header_str($name.as_str()).map_err(|e|S3Error::InvalidRequest(e.into()))? {
-            $dst.$field = Some(s.into());
+    (from $src:ident to $dst:ident: headers [$(($name:expr,$f:ident),)+])=>{$(
+        if let Some(s) = $src.get_header_str($name)
+            .map_err(|e| S3Error::InvalidRequest(e.into()))?
+        {
+            $dst.$f = Some(s.into());
         }
-    }};
+    )+};
 }
 
 #[allow(unused_variables)] // TODO: remove it
@@ -218,7 +226,7 @@ where
                                 ..ListObjectsRequest::default()
                             };
 
-                            assign_opt!(from query to input fields [
+                            assign_opt!(from query to input: fields [
                                 delimiter,
                                 encoding_type,
                                 marker,
@@ -226,7 +234,9 @@ where
                                 prefix,
                             ]);
 
-                            assign_opt!(from req header X_AMZ_REQUEST_PAYER to input field request_payer);
+                            assign_opt!(from req to input: headers [
+                                (&*X_AMZ_REQUEST_PAYER, request_payer),
+                            ]);
 
                             self.storage.list_objects(input).await.try_into_response()
                         }
@@ -236,7 +246,7 @@ where
                                 ..ListObjectsV2Request::default()
                             };
 
-                            assign_opt!(from query to input fields [
+                            assign_opt!(from query to input: fields [
                                 continuation_token,
                                 delimiter,
                                 encoding_type,
@@ -246,7 +256,9 @@ where
                                 start_after,
                             ]);
 
-                            assign_opt!(from req header X_AMZ_REQUEST_PAYER to input field request_payer);
+                            assign_opt!(from req to input: headers [
+                                (&*X_AMZ_REQUEST_PAYER, request_payer),
+                            ]);
 
                             self.storage
                                 .list_objects_v2(input)
@@ -279,13 +291,16 @@ where
                     Some(query) => {
                         if query.delete.is_some() {
                             let delete: dto::xml::Delete = deserialize_xml_body(body).await?;
-                            let mut input: dto::DeleteObjectsRequest = dto::DeleteObjectsRequest {
+                            let mut input: DeleteObjectsRequest = DeleteObjectsRequest {
                                 delete: delete.into(),
                                 bucket: bucket.into(),
                                 ..dto::DeleteObjectsRequest::default()
                             };
-                            assign_opt!(from req header X_AMZ_MFA to input field mfa);
-                            assign_opt!(from req header X_AMZ_REQUEST_PAYER to input field request_payer);
+
+                            assign_opt!(from req to input: headers [
+                                (&*X_AMZ_MFA, mfa),
+                                (&*X_AMZ_REQUEST_PAYER, request_payer),
+                            ]);
                             // TODO: handle "x-amz-bypass-governance-retention"
                             self.storage.delete_objects(input).await.try_into_response()
                         } else {
@@ -314,6 +329,57 @@ where
             S3Path::Object { bucket, key } => {
                 let bucket = bucket.into();
                 let key = key.into();
+
+                if let Some(copy_source) = extract_header(&req, &*X_AMZ_COPY_SOURCE)? {
+                    crate::header::CopySource::try_match(copy_source)
+                        .map_err(|e| S3Error::InvalidRequest(e.into()))?;
+
+                    let mut input: CopyObjectRequest = CopyObjectRequest {
+                        bucket,
+                        key,
+                        copy_source: copy_source.into(),
+                        ..CopyObjectRequest::default()
+                    };
+
+                    assign_opt!(from req to input: headers [
+                            (&*X_AMZ_ACL, acl),
+                            (CACHE_CONTROL, cache_control),
+                            (CONTENT_DISPOSITION, content_disposition),
+                            (CONTENT_ENCODING, content_encoding),
+                            (CONTENT_LANGUAGE, content_language),
+                            (CONTENT_TYPE, content_type),
+                            (&*X_AMZ_COPY_SOURCE_IF_MATCH,copy_source_if_match),
+                            (&*X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE,copy_source_if_modified_since),
+                            (&*X_AMZ_COPY_SOURCE_IF_NONE_MATCH,copy_source_if_none_match),
+                            (&*X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE,copy_source_if_unmodified_since),
+                            (EXPIRES, expires),
+                            (&*X_AMZ_GRANT_FULL_CONTROL, grant_full_control),
+                            (&*X_AMZ_GRANT_READ, grant_read),
+                            (&*X_AMZ_GRANT_READ_ACP, grant_read_acp),
+                            (&*X_AMZ_GRANT_WRITE_ACP, grant_write_acp),
+                            (&*X_AMZ_METADATA_DIRECTIVE, metadata_directive),
+                            (&*X_AMZ_TAGGING_DIRECTIVE, tagging_directive),
+                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION,server_side_encryption),
+                            (&*X_AMZ_STORAGE_CLASS, storage_class),
+                            (&*X_AMZ_WEBSITE_REDIRECT_LOCATION,website_redirect_location),
+                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,sse_customer_algorithm),
+                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,sse_customer_key),
+                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,sse_customer_key_md5),
+                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,ssekms_key_id),
+                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT,ssekms_encryption_context),
+                            (&*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,copy_source_sse_customer_algorithm),
+                            (&*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,copy_source_sse_customer_key),
+                            (&*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,copy_source_sse_customer_key_md5),
+                            (&*X_AMZ_REQUEST_PAYER, request_payer),
+                            (&*X_AMZ_TAGGING, tagging),
+                            (&*X_AMZ_OBJECT_LOCK_MODE, object_lock_mode),
+                            (&*X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,object_lock_retain_until_date),
+                            (&*X_AMZ_OBJECT_LOCK_LEGAL_HOLD, object_lock_legal_hold_status),
+                    ]);
+
+                    return self.storage.copy_object(input).await.try_into_response();
+                }
+
                 let body = req.into_body().map(|try_chunk| {
                     try_chunk.map(|c| c).map_err(|e| {
                         io::Error::new(

@@ -1,15 +1,8 @@
 //! Trait representing the capabilities of the Amazon S3 API at server side
 
-use crate::dto::{
-    CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
-    DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
-    GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest, GetObjectError,
-    GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput, HeadBucketRequest,
-    HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput,
-    ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
-    ListObjectsV2Output, ListObjectsV2Request, PutObjectError, PutObjectOutput, PutObjectRequest,
-};
+#![allow(clippy::wildcard_imports)]
+
+use crate::dto::*;
 use crate::error::S3Result;
 
 use async_trait::async_trait;
@@ -22,6 +15,12 @@ pub trait S3Storage {
         &self,
         input: CreateBucketRequest,
     ) -> S3Result<CreateBucketOutput, CreateBucketError>;
+
+    /// [CopyObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html)
+    async fn copy_object(
+        &self,
+        input: CopyObjectRequest,
+    ) -> S3Result<CopyObjectOutput, CopyObjectError>;
 
     /// [DeleteBucket](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucket.html)
     async fn delete_bucket(
