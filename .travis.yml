@@ -1,0 +1,26 @@
+branches:
+  only: 
+    - master
+
+arch:
+  - amd64
+  - arm64
+
+os: linux
+
+language: rust
+
+rust:
+  - stable
+  - nightly
+
+jobs:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+
+cache: cargo
+
+script:
+  - cargo build --verbose
+  - cargo test --all-features -- --test-threads=1
