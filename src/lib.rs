@@ -47,7 +47,7 @@
     clippy::unwrap_used, // Tests need `unwrap`
 ))]
 #![allow(
-    // TODO: Deny lints below
+    // FIXME: Deny lints below
     clippy::multiple_crate_versions
 )]
 

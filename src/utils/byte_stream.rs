@@ -27,7 +27,7 @@ impl<R: AsyncRead> Stream for ByteStream<R> {
     type Item = io::Result<Bytes>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // TODO: reuse the buf
+        // FIXME: reuse the buf
         let mut buf = vec![0_u8; self.buf_size];
 
         let this = self.project();

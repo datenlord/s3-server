@@ -1,7 +1,5 @@
 //! Types which can be converted into a response
 
-#![allow(clippy::wildcard_imports)] // for `use super::*`
-
 use crate::{
     error::{S3Error, S3Result},
     error_code::S3ErrorCode,

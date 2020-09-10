@@ -6,9 +6,6 @@ use std::convert::Infallible as Never;
 use std::error::Error;
 use std::fmt::{self, Display};
 
-// TODO: switch to thiserror
-// See https://github.com/dtolnay/thiserror/issues/79
-
 /// Result carrying a generic `S3Error<E>`
 pub type S3Result<T, E = Never> = Result<T, S3Error<E>>;
 

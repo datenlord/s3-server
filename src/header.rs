@@ -1,6 +1,3 @@
-#![allow(dead_code)] // TODO: remove this
-#![allow(missing_copy_implementations)]
-
 //! Common Request Headers
 
 use crate::utils::{is_sha256_checksum, Apply};
@@ -95,13 +92,14 @@ pub(super) struct ParseAuthorizationError {
     _priv: (),
 }
 
+#[allow(dead_code)] // TODO: remove this
 impl<'a> AuthorizationV4<'a> {
     /// parse `AuthorizationV4` from `Authorization` header
     pub(super) fn from_header_str(
         auth: &'a str,
     ) -> Result<AuthorizationV4<'a>, ParseAuthorizationError> {
-        #[allow(clippy::shadow_reuse)]
         /// nom parser
+        #[allow(clippy::shadow_reuse)]
         fn parse(input: &str) -> nom::IResult<&str, AuthorizationV4<'_>> {
             use chrono::{TimeZone, Utc};
             use nom::{
@@ -189,6 +187,7 @@ impl<'a> AuthorizationV4<'a> {
 }
 
 /// `ParseCopySourceError`
+#[allow(missing_copy_implementations)]
 #[derive(Debug, thiserror::Error)]
 #[error("ParseCopySourceError")]
 pub struct ParseCopySourceError {
@@ -301,7 +300,7 @@ mod tests {
 pub mod names {
     //! Amz header names
 
-    // TODO: declare const headers, see <https://github.com/hyperium/http/issues/264>
+    // FIXME: declare const headers, see <https://github.com/hyperium/http/issues/264>
 
     use hyper::header::HeaderName;
     use once_cell::sync::Lazy;
