@@ -1,7 +1,17 @@
 //! [`GetObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)
 
 use super::*;
-use crate::dto::{GetObjectError, GetObjectOutput};
+use crate::dto::{GetObjectError, GetObjectOutput, GetObjectRequest};
+
+/// extract operation request
+pub fn extract(_req: &Request, bucket: &str, key: &str) -> Result<GetObjectRequest, BoxStdError> {
+    let input = GetObjectRequest {
+        bucket: bucket.into(),
+        key: key.into(),
+        ..GetObjectRequest::default() // TODO: handle other fields
+    };
+    Ok(input)
+}
 
 impl S3Output for GetObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {

@@ -1,7 +1,17 @@
 //! [`HeadObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadObject.html)
 
 use super::*;
-use crate::dto::{HeadObjectError, HeadObjectOutput};
+use crate::dto::{HeadObjectError, HeadObjectOutput, HeadObjectRequest};
+
+/// extract operation request
+pub fn extract(_req: &Request, bucket: &str, key: &str) -> Result<HeadObjectRequest, BoxStdError> {
+    let input = HeadObjectRequest {
+        bucket: bucket.into(),
+        key: key.into(),
+        ..HeadObjectRequest::default() // TODO: handle other fields
+    };
+    Ok(input)
+}
 
 impl S3Output for HeadObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {

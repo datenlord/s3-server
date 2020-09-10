@@ -1,7 +1,35 @@
 //! [`ListObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html)
 
 use super::*;
-use crate::dto::{ListObjectsError, ListObjectsOutput};
+use crate::dto::{ListObjectsError, ListObjectsOutput, ListObjectsRequest};
+
+/// extract operation request
+pub fn extract(
+    req: &Request,
+    query: Option<GetQuery>,
+    bucket: &str,
+) -> Result<ListObjectsRequest, BoxStdError> {
+    let mut input = ListObjectsRequest {
+        bucket: bucket.into(),
+        ..ListObjectsRequest::default()
+    };
+
+    if let Some(query) = query {
+        assign_opt!(from query to input: fields [
+            delimiter,
+            encoding_type,
+            marker,
+            max_keys,
+            prefix,
+        ]);
+    }
+
+    assign_opt!(from req to input: headers [
+        (&*X_AMZ_REQUEST_PAYER, request_payer),
+    ]);
+
+    Ok(input)
+}
 
 impl S3Output for ListObjectsError {
     fn try_into_response(self) -> S3Result<Response> {

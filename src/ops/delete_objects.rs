@@ -1,8 +1,30 @@
 //! [`DeleteObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html)
 
 use super::*;
-use crate::dto::{DeleteObjectsError, DeleteObjectsOutput};
-use crate::header::names::X_AMZ_REQUEST_CHARGED;
+use crate::dto::{self, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest};
+
+/// extract operation request
+pub async fn extract(
+    req: &Request,
+    body: Body,
+    bucket: &str,
+) -> Result<DeleteObjectsRequest, BoxStdError> {
+    let delete: dto::xml::Delete = deserialize_xml_body(body).await?;
+
+    let mut input: DeleteObjectsRequest = DeleteObjectsRequest {
+        delete: delete.into(),
+        bucket: bucket.into(),
+        ..dto::DeleteObjectsRequest::default()
+    };
+
+    assign_opt!(from req to input: headers [
+        (&*X_AMZ_MFA, mfa),
+        (&*X_AMZ_REQUEST_PAYER, request_payer),
+    ]);
+
+    // TODO: handle "x-amz-bypass-governance-retention"
+    Ok(input)
+}
 
 impl S3Output for DeleteObjectsOutput {
     fn try_into_response(self) -> S3Result<Response> {

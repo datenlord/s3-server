@@ -22,6 +22,10 @@ pub struct DeleteBucketOutput;
 #[derive(Debug, Clone, Copy)]
 pub struct HeadBucketOutput;
 
+/// `HeadBucketOutput`
+#[derive(Debug, Clone, Copy)]
+pub struct ListBucketsRequest;
+
 pub(crate) mod xml {
     //! Xml repr
 

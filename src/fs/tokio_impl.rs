@@ -291,7 +291,10 @@ impl S3Storage for FileSystem {
         .await
     }
 
-    async fn list_buckets(&self) -> S3Result<ListBucketsOutput, ListBucketsError> {
+    async fn list_buckets(
+        &self,
+        _: ListBucketsRequest,
+    ) -> S3Result<ListBucketsOutput, ListBucketsError> {
         wrap_storage(async move {
             let mut buckets = Vec::new();
 

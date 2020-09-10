@@ -6,6 +6,11 @@ mod request;
 mod response;
 mod xml;
 
+use hyper::Body;
+use serde::de::DeserializeOwned;
+
+use crate::BoxStdError;
+
 pub use self::apply::Apply;
 pub use self::byte_stream::ByteStream;
 pub use self::request::RequestExt;
@@ -28,4 +33,25 @@ macro_rules! cfg_rt_tokio{
 pub fn is_sha256_checksum(s: &str) -> bool {
     let is_lowercase_hex = |&c: &u8| c.is_ascii_digit() || (b'a'..=b'f').contains(&c);
     s.len() == 64 && s.as_bytes().iter().all(is_lowercase_hex)
+}
+
+macro_rules! assign_opt{
+    (from $src:ident to $dst:ident: fields [$($field: tt,)+])=>{$(
+        if $src.$field.is_some(){
+            $dst.$field = $src.$field;
+        }
+    )+};
+
+    (from $src:ident to $dst:ident: headers [$(($name:expr,$f:ident),)+])=>{$(
+        if let Some(s) = $src.get_header_str($name)? {
+            $dst.$f = Some(s.into());
+        }
+    )+};
+}
+
+/// deserialize xml body
+pub async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> Result<T, BoxStdError> {
+    let bytes = hyper::body::to_bytes(body).await?;
+    let ans: T = quick_xml::de::from_reader(&*bytes)?;
+    Ok(ans)
 }

@@ -1,37 +1,29 @@
 //! Generic S3 service which wraps a S3 storage
 
-#![allow(clippy::wildcard_imports)]
-
-use crate::dto::*;
-use crate::header::names::*;
-use hyper::header::*;
-
-use crate::path::S3Path;
-use crate::query::GetQuery;
-use crate::storage::S3Storage;
-use crate::utils::Apply;
-use crate::utils::RequestExt;
 use crate::{
-    dto,
     error::{S3Error, S3Result},
-    BoxStdError,
+    header::names::*,
+    ops,
+    output::S3Output,
+    path::S3Path,
+    query::GetQuery,
+    query::PostQuery,
+    storage::S3Storage,
+    utils::{Apply, RequestExt},
+    BoxStdError, Request, Response,
 };
-use crate::{output::S3Output, query::PostQuery};
-use crate::{Request, Response};
 
 use std::{
     future::Future,
-    io,
     ops::Deref,
     sync::Arc,
     task::{Context, Poll},
 };
 
-use futures::{future::BoxFuture, stream::StreamExt};
+use futures::future::BoxFuture;
+use hyper::{header::*, Method};
 use log::{debug, error};
 use serde::de::DeserializeOwned;
-
-use hyper::{Body, Method};
 
 /// Generic S3 service which wraps a S3 storage
 #[derive(Debug)]
@@ -107,6 +99,28 @@ async fn wrap_handle<T>(f: impl Future<Output = Result<T, BoxStdError>> + Send) 
     f.await.map_err(|e| S3Error::InvalidRequest(e))
 }
 
+/// wrap handle sync
+fn wrap_handle_sync<T>(f: impl FnOnce() -> Result<T, BoxStdError>) -> S3Result<T> {
+    f().map_err(|e| S3Error::InvalidRequest(e))
+}
+
+macro_rules! op_call{
+    ($op:ident with () by $storage:expr)  => {{
+        let input = wrap_handle_sync(ops::$op::extract)?;
+        $storage.$op(input).await.try_into_response()
+    }};
+
+    ($op:ident with ($($arg:expr),+) by $storage:expr)  => {{
+        let input = wrap_handle_sync(||ops::$op::extract($($arg),+))?;
+        $storage.$op(input).await.try_into_response()
+    }};
+
+    ($op:ident with async ($($arg:expr),*) by $storage:expr)  => {{
+        let input = wrap_handle(ops::$op::extract($($arg),*)).await?;
+        $storage.$op(input).await.try_into_response()
+    }};
+}
+
 /// helper function for parsing request path
 fn parse_path(req: &Request) -> S3Result<S3Path<'_>> {
     match S3Path::try_from_path(req.uri().path()) {
@@ -134,33 +148,6 @@ fn extract_header(req: &Request, name: impl AsHeaderName) -> S3Result<Option<&st
     }
 }
 
-/// deserialize xml body
-async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> S3Result<T> {
-    wrap_handle(async move {
-        let bytes = hyper::body::to_bytes(body).await?;
-        let ans: T = quick_xml::de::from_reader(&*bytes)?;
-        Ok(ans)
-    })
-    .await
-}
-
-macro_rules! assign_opt{
-    (from $src:ident to $dst:ident: fields [$($field: tt,)+])=>{$(
-        if $src.$field.is_some(){
-            $dst.$field = $src.$field;
-        }
-    )+};
-
-    (from $src:ident to $dst:ident: headers [$(($name:expr,$f:ident),)+])=>{$(
-        if let Some(s) = $src.get_header_str($name)
-            .map_err(|e| S3Error::InvalidRequest(e.into()))?
-        {
-            $dst.$f = Some(s.into());
-        }
-    )+};
-}
-
-#[allow(unused_variables)] // TODO: remove it
 impl<T> S3Service<T>
 where
     T: S3Storage + Send + Sync + 'static,
@@ -197,85 +184,25 @@ where
     async fn handle_get(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
-            S3Path::Root => self.storage.list_buckets().await.try_into_response(),
-            S3Path::Bucket { bucket } => match extract_query::<GetQuery>(&req)? {
-                None => {
-                    let input = ListObjectsRequest {
-                        bucket: bucket.into(),
-                        ..ListObjectsRequest::default()
-                    };
-                    self.storage.list_objects(input).await.try_into_response()
-                }
-                Some(query) => {
-                    dbg!(&query);
-                    if query.location.is_some() {
-                        let input = GetBucketLocationRequest {
-                            bucket: bucket.into(),
-                        };
-                        return self
-                            .storage
-                            .get_bucket_location(input)
-                            .await
-                            .try_into_response();
-                    }
-
-                    match query.list_type {
-                        None => {
-                            let mut input = ListObjectsRequest {
-                                bucket: bucket.into(),
-                                ..ListObjectsRequest::default()
-                            };
-
-                            assign_opt!(from query to input: fields [
-                                delimiter,
-                                encoding_type,
-                                marker,
-                                max_keys,
-                                prefix,
-                            ]);
-
-                            assign_opt!(from req to input: headers [
-                                (&*X_AMZ_REQUEST_PAYER, request_payer),
-                            ]);
-
-                            self.storage.list_objects(input).await.try_into_response()
-                        }
-                        Some(2) => {
-                            let mut input = ListObjectsV2Request {
-                                bucket: bucket.into(),
-                                ..ListObjectsV2Request::default()
-                            };
-
-                            assign_opt!(from query to input: fields [
-                                continuation_token,
-                                delimiter,
-                                encoding_type,
-                                fetch_owner,
-                                max_keys,
-                                prefix,
-                                start_after,
-                            ]);
-
-                            assign_opt!(from req to input: headers [
-                                (&*X_AMZ_REQUEST_PAYER, request_payer),
-                            ]);
-
-                            self.storage
-                                .list_objects_v2(input)
-                                .await
-                                .try_into_response()
-                        }
-                        Some(_) => Err(S3Error::NotSupported),
-                    }
-                }
-            },
-            S3Path::Object { bucket, key } => {
-                let input = GetObjectRequest {
-                    bucket: bucket.into(),
-                    key: key.into(),
-                    ..GetObjectRequest::default() // TODO: handle other fields
+            S3Path::Root => op_call!(list_buckets with () by self.storage),
+            S3Path::Bucket { bucket } => {
+                let query = match extract_query::<GetQuery>(&req)? {
+                    None => return op_call!(list_objects with (&req, None, bucket) by self.storage),
+                    Some(query) => query,
                 };
-                self.storage.get_object(input).await.try_into_response()
+
+                if query.location.is_some() {
+                    return op_call!(get_bucket_location with (bucket) by self.storage);
+                }
+
+                match query.list_type {
+                    None => op_call!(list_objects with (&req,Some(query),bucket) by self.storage),
+                    Some(2) => op_call!(list_objects_v2 with (&req,query,bucket) by self.storage),
+                    Some(_) => Err(S3Error::NotSupported),
+                }
+            }
+            S3Path::Object { bucket, key } => {
+                op_call!(get_object with (&req, bucket, key) by self.storage)
             }
         }
     }
@@ -287,116 +214,40 @@ where
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
             S3Path::Bucket { bucket } => {
-                match extract_query::<PostQuery>(&req)? {
-                    Some(query) => {
-                        if query.delete.is_some() {
-                            let delete: dto::xml::Delete = deserialize_xml_body(body).await?;
-                            let mut input: DeleteObjectsRequest = DeleteObjectsRequest {
-                                delete: delete.into(),
-                                bucket: bucket.into(),
-                                ..dto::DeleteObjectsRequest::default()
-                            };
+                let query = match extract_query::<PostQuery>(&req)? {
+                    None => return Err(S3Error::NotSupported),
+                    Some(query) => query,
+                };
 
-                            assign_opt!(from req to input: headers [
-                                (&*X_AMZ_MFA, mfa),
-                                (&*X_AMZ_REQUEST_PAYER, request_payer),
-                            ]);
-                            // TODO: handle "x-amz-bypass-governance-retention"
-                            self.storage.delete_objects(input).await.try_into_response()
-                        } else {
-                            Err(S3Error::NotSupported)
-                        }
-                    }
-                    None => Err(S3Error::NotSupported),
+                if query.delete.is_some() {
+                    return op_call!(delete_objects with async (&req, body, bucket) by self.storage);
                 }
-            } // TODO: impl handler
-            S3Path::Object { bucket, key } => Err(S3Error::NotSupported), // TODO: impl handler
+
+                // TODO: impl handler
+
+                Err(S3Error::NotSupported)
+            }
+            S3Path::Object { bucket, key } => {
+                dbg!((bucket, key)); // TODO: remove this place holder
+                Err(S3Error::NotSupported) // TODO: impl handler
+            }
         }
     }
 
     /// handle PUT request
-    async fn handle_put(&self, req: Request) -> S3Result<Response> {
+    async fn handle_put(&self, mut req: Request) -> S3Result<Response> {
+        let body = req.take_body();
         let path = parse_path(&req)?;
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
             S3Path::Bucket { bucket } => {
-                let input: CreateBucketRequest = CreateBucketRequest {
-                    bucket: bucket.into(),
-                    ..CreateBucketRequest::default() // TODO: handle other fields
-                };
-                self.storage.create_bucket(input).await.try_into_response()
+                op_call!(create_bucket with (&req, bucket) by self.storage)
             }
             S3Path::Object { bucket, key } => {
-                let bucket = bucket.into();
-                let key = key.into();
-
                 if let Some(copy_source) = extract_header(&req, &*X_AMZ_COPY_SOURCE)? {
-                    crate::header::CopySource::try_match(copy_source)
-                        .map_err(|e| S3Error::InvalidRequest(e.into()))?;
-
-                    let mut input: CopyObjectRequest = CopyObjectRequest {
-                        bucket,
-                        key,
-                        copy_source: copy_source.into(),
-                        ..CopyObjectRequest::default()
-                    };
-
-                    assign_opt!(from req to input: headers [
-                            (&*X_AMZ_ACL, acl),
-                            (CACHE_CONTROL, cache_control),
-                            (CONTENT_DISPOSITION, content_disposition),
-                            (CONTENT_ENCODING, content_encoding),
-                            (CONTENT_LANGUAGE, content_language),
-                            (CONTENT_TYPE, content_type),
-                            (&*X_AMZ_COPY_SOURCE_IF_MATCH,copy_source_if_match),
-                            (&*X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE,copy_source_if_modified_since),
-                            (&*X_AMZ_COPY_SOURCE_IF_NONE_MATCH,copy_source_if_none_match),
-                            (&*X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE,copy_source_if_unmodified_since),
-                            (EXPIRES, expires),
-                            (&*X_AMZ_GRANT_FULL_CONTROL, grant_full_control),
-                            (&*X_AMZ_GRANT_READ, grant_read),
-                            (&*X_AMZ_GRANT_READ_ACP, grant_read_acp),
-                            (&*X_AMZ_GRANT_WRITE_ACP, grant_write_acp),
-                            (&*X_AMZ_METADATA_DIRECTIVE, metadata_directive),
-                            (&*X_AMZ_TAGGING_DIRECTIVE, tagging_directive),
-                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION,server_side_encryption),
-                            (&*X_AMZ_STORAGE_CLASS, storage_class),
-                            (&*X_AMZ_WEBSITE_REDIRECT_LOCATION,website_redirect_location),
-                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,sse_customer_algorithm),
-                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,sse_customer_key),
-                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,sse_customer_key_md5),
-                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,ssekms_key_id),
-                            (&*X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT,ssekms_encryption_context),
-                            (&*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,copy_source_sse_customer_algorithm),
-                            (&*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,copy_source_sse_customer_key),
-                            (&*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,copy_source_sse_customer_key_md5),
-                            (&*X_AMZ_REQUEST_PAYER, request_payer),
-                            (&*X_AMZ_TAGGING, tagging),
-                            (&*X_AMZ_OBJECT_LOCK_MODE, object_lock_mode),
-                            (&*X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,object_lock_retain_until_date),
-                            (&*X_AMZ_OBJECT_LOCK_LEGAL_HOLD, object_lock_legal_hold_status),
-                    ]);
-
-                    return self.storage.copy_object(input).await.try_into_response();
+                    return op_call!(copy_object with (&req, bucket,key,copy_source) by self.storage);
                 }
-
-                let body = req.into_body().map(|try_chunk| {
-                    try_chunk.map(|c| c).map_err(|e| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Error obtaining chunk: {}", e),
-                        )
-                    })
-                });
-
-                let input: PutObjectRequest = PutObjectRequest {
-                    bucket,
-                    key,
-                    body: Some(crate::dto::ByteStream::new(body)),
-                    ..PutObjectRequest::default() // TODO: handle other fields
-                };
-
-                self.storage.put_object(input).await.try_into_response()
+                op_call!(put_object with (&req,body,bucket,key) by self.storage)
             }
         }
     }
@@ -406,20 +257,9 @@ where
         let path = parse_path(&req)?;
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
-            S3Path::Bucket { bucket } => {
-                let input: DeleteBucketRequest = DeleteBucketRequest {
-                    bucket: bucket.into(),
-                };
-                self.storage.delete_bucket(input).await.try_into_response()
-            }
+            S3Path::Bucket { bucket } => op_call!(delete_bucket with (bucket) by self.storage),
             S3Path::Object { bucket, key } => {
-                let input: DeleteObjectRequest = DeleteObjectRequest {
-                    bucket: bucket.into(),
-                    key: key.into(),
-                    ..DeleteObjectRequest::default() // TODO: handle other fields
-                };
-
-                self.storage.delete_object(input).await.try_into_response()
+                op_call!(delete_object with (&req, bucket,key) by self.storage)
             }
         }
     }
@@ -429,20 +269,9 @@ where
         let path = parse_path(&req)?;
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
-            S3Path::Bucket { bucket } => {
-                // head bucket
-                let input = HeadBucketRequest {
-                    bucket: bucket.into(),
-                };
-                self.storage.head_bucket(input).await.try_into_response()
-            }
+            S3Path::Bucket { bucket } => op_call!(head_bucket with (bucket) by self.storage),
             S3Path::Object { bucket, key } => {
-                let input = HeadObjectRequest {
-                    bucket: bucket.into(),
-                    key: key.into(),
-                    ..HeadObjectRequest::default() // TODO: handle other fields
-                };
-                self.storage.head_object(input).await.try_into_response()
+                op_call!(head_object with (&req, bucket, key) by self.storage)
             }
         }
     }

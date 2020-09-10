@@ -1,7 +1,16 @@
 //! [`CreateBucket`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html)
 
 use super::*;
-use crate::dto::{CreateBucketError, CreateBucketOutput};
+use crate::dto::{CreateBucketError, CreateBucketOutput, CreateBucketRequest};
+
+/// extract operation request
+pub fn extract(_req: &Request, bucket: &str) -> Result<CreateBucketRequest, BoxStdError> {
+    let input: CreateBucketRequest = CreateBucketRequest {
+        bucket: bucket.into(),
+        ..CreateBucketRequest::default() // TODO: handle other fields
+    };
+    Ok(input)
+}
 
 impl S3Output for CreateBucketOutput {
     fn try_into_response(self) -> S3Result<Response> {

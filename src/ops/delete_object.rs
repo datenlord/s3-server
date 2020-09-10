@@ -1,7 +1,21 @@
 //! [`DeleteObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html)
 
 use super::*;
-use crate::dto::{DeleteObjectError, DeleteObjectOutput};
+use crate::dto::{DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest};
+
+/// extract operation request
+pub fn extract(
+    _req: &Request,
+    bucket: &str,
+    key: &str,
+) -> Result<DeleteObjectRequest, BoxStdError> {
+    let input: DeleteObjectRequest = DeleteObjectRequest {
+        bucket: bucket.into(),
+        key: key.into(),
+        ..DeleteObjectRequest::default() // TODO: handle other fields
+    };
+    Ok(input)
+}
 
 impl S3Output for DeleteObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {

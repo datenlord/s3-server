@@ -1,7 +1,12 @@
 //! [`ListBuckets`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html)
 
 use super::*;
-use crate::dto::{ListBucketsError, ListBucketsOutput};
+use crate::dto::{ListBucketsError, ListBucketsOutput, ListBucketsRequest};
+
+/// extract operation request
+pub fn extract() -> Result<ListBucketsRequest, BoxStdError> {
+    Ok(ListBucketsRequest)
+}
 
 impl S3Output for ListBucketsOutput {
     fn try_into_response(self) -> S3Result<Response> {

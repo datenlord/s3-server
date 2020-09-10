@@ -65,7 +65,10 @@ pub trait S3Storage {
     ) -> S3Result<HeadObjectOutput, HeadObjectError>;
 
     /// [ListBuckets](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html)
-    async fn list_buckets(&self) -> S3Result<ListBucketsOutput, ListBucketsError>;
+    async fn list_buckets(
+        &self,
+        input: ListBucketsRequest,
+    ) -> S3Result<ListBucketsOutput, ListBucketsError>;
 
     /// [ListObjects](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html)
     async fn list_objects(
