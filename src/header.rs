@@ -425,5 +425,23 @@ pub mod names {
 
         /// x-amz-object-lock-legal-hold
         X_AMZ_OBJECT_LOCK_LEGAL_HOLD: "x-amz-object-lock-legal-hold",
+
+        /// x-amz-delete-marker
+        X_AMZ_DELETE_MARKER: "x-amz-delete-marker",
+
+        /// x-amz-restore
+        X_AMZ_RESTORE: "x-amz-restore",
+
+        /// x-amz-missing-meta
+        X_AMZ_MISSING_META: "x-amz-missing-meta",
+
+        /// x-amz-replication-status
+        X_AMZ_REPLICATION_STATUS: "x-amz-replication-status",
+
+        /// x-amz-mp-parts-count
+        X_AMZ_MP_PARTS_COUNT: "x-amz-mp-parts-count",
+
+        /// x-amz-tagging-count
+        X_AMZ_TAGGING_COUNT: "x-amz-tagging-count",
     ];
 }
