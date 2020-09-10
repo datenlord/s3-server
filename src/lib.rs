@@ -40,6 +40,7 @@
     clippy::module_name_repetitions, // Allowed by default
     unreachable_pub, // Conflicts with root-controlled visibility
     clippy::redundant_pub_crate, // Conflicts with root-controlled visibility
+    clippy::wildcard_imports, // For dto, header names and `super::*`
 )]
 #![cfg_attr(test, allow(
     clippy::panic, // Panic when fatal failures occur
@@ -55,6 +56,7 @@ pub(crate) mod utils;
 
 mod error;
 mod error_code;
+mod ops;
 mod output;
 mod service;
 mod storage;
