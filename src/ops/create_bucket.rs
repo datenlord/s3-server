@@ -1,14 +1,55 @@
 //! [`CreateBucket`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html)
 
 use super::*;
-use crate::dto::{CreateBucketError, CreateBucketOutput, CreateBucketRequest};
+use crate::dto::{
+    CreateBucketConfiguration, CreateBucketError, CreateBucketOutput, CreateBucketRequest,
+};
+
+mod xml {
+    //! xml repr
+
+    use serde::Deserialize;
+    #[derive(Debug, Deserialize)]
+    /// `CreateBucketConfiguration`
+    pub struct CreateBucketConfiguration {
+        /// LocationConstraint
+        #[serde(rename = "LocationConstraint")]
+        pub location_constraint: Option<String>,
+    }
+
+    impl From<CreateBucketConfiguration> for super::CreateBucketConfiguration {
+        fn from(config: CreateBucketConfiguration) -> Self {
+            Self {
+                location_constraint: config.location_constraint,
+            }
+        }
+    }
+}
 
 /// extract operation request
-pub fn extract(_req: &Request, bucket: &str) -> Result<CreateBucketRequest, BoxStdError> {
-    let input: CreateBucketRequest = CreateBucketRequest {
+pub async fn extract(
+    req: &Request,
+    body: Body,
+    bucket: &str,
+) -> Result<CreateBucketRequest, BoxStdError> {
+    let config: Option<self::xml::CreateBucketConfiguration> = deserialize_xml_body(body).await?;
+
+    let mut input: CreateBucketRequest = CreateBucketRequest {
         bucket: bucket.into(),
-        ..CreateBucketRequest::default() // TODO: handle other fields
+        create_bucket_configuration: config.map(Into::into),
+        ..CreateBucketRequest::default()
     };
+
+    assign_opt!(from req to input headers [
+        &*X_AMZ_ACL => acl,
+        &*X_AMZ_GRANT_FULL_CONTROL =>  grant_full_control,
+        &*X_AMZ_GRANT_READ =>  grant_read,
+        &*X_AMZ_GRANT_READ_ACP =>  grant_read_acp,
+        &*X_AMZ_GRANT_WRITE => grant_write,
+        &*X_AMZ_GRANT_WRITE_ACP =>  grant_write_acp,
+        &*X_AMZ_BUCKET_OBJECT_LOCK_ENABLED => object_lock_enabled_for_bucket,
+    ]);
+
     Ok(input)
 }
 

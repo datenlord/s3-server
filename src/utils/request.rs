@@ -7,7 +7,7 @@ use hyper::{
     Body,
 };
 use serde::de::DeserializeOwned;
-use std::mem;
+use std::{mem, str::FromStr};
 
 /// `RequestExt`
 pub trait RequestExt {
@@ -22,6 +22,15 @@ pub trait RequestExt {
 
     /// extract s3 path
     fn extract_s3_path(&self) -> Result<S3Path<'_>, ParseS3PathError>;
+
+    /// assign opt header
+    fn assign_opt_header<T>(
+        &self,
+        name: impl AsHeaderName,
+        opt: &mut Option<T>,
+    ) -> Result<Result<&Self, T::Err>, ToStrError>
+    where
+        T: FromStr;
 }
 
 impl RequestExt for Request {
@@ -45,5 +54,23 @@ impl RequestExt for Request {
 
     fn extract_s3_path(&self) -> Result<S3Path<'_>, ParseS3PathError> {
         S3Path::try_from_path(self.uri().path())
+    }
+
+    fn assign_opt_header<T>(
+        &self,
+        name: impl AsHeaderName,
+        opt: &mut Option<T>,
+    ) -> Result<Result<&Self, T::Err>, ToStrError>
+    where
+        T: FromStr,
+    {
+        if let Some(s) = self.get_header_str(name)? {
+            match s.parse() {
+                Ok(v) => *opt = Some(v),
+                Err(e) => return Ok(Err(e)),
+            }
+        }
+
+        Ok(Ok(self))
     }
 }

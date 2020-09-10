@@ -366,6 +366,9 @@ pub mod names {
         /// x-amz-grant-read
         X_AMZ_GRANT_READ: "x-amz-grant-read",
 
+        /// x-amz-grant-write
+        X_AMZ_GRANT_WRITE: "x-amz-grant-write",
+
         /// x-amz-grant-read-acp
         X_AMZ_GRANT_READ_ACP: "x-amz-grant-read-acp",
 
@@ -443,5 +446,14 @@ pub mod names {
 
         /// x-amz-tagging-count
         X_AMZ_TAGGING_COUNT: "x-amz-tagging-count",
+
+        /// Content-MD5
+        CONTENT_MD5: "content-md5",
+
+        /// x-amz-bucket-object-lock-enabled
+        X_AMZ_BUCKET_OBJECT_LOCK_ENABLED: "x-amz-bucket-object-lock-enabled",
+
+        /// x-amz-bypass-governance-retention
+        X_AMZ_BYPASS_GOVERNANCE_RETENTION: "x-amz-bypass-governance-retention",
     ];
 }

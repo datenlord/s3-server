@@ -4,12 +4,25 @@ use super::*;
 use crate::dto::{HeadObjectError, HeadObjectOutput, HeadObjectRequest};
 
 /// extract operation request
-pub fn extract(_req: &Request, bucket: &str, key: &str) -> Result<HeadObjectRequest, BoxStdError> {
-    let input = HeadObjectRequest {
+pub fn extract(req: &Request, bucket: &str, key: &str) -> Result<HeadObjectRequest, BoxStdError> {
+    let mut input = HeadObjectRequest {
         bucket: bucket.into(),
         key: key.into(),
-        ..HeadObjectRequest::default() // TODO: handle other fields
+        ..HeadObjectRequest::default()
     };
+
+    assign_opt!(from req to input headers [
+        IF_MATCH => if_match,
+        IF_MODIFIED_SINCE => if_modified_since,
+        IF_NONE_MATCH => if_none_match,
+        IF_UNMODIFIED_SINCE => if_unmodified_since,
+        RANGE => range,
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM => sse_customer_algorithm,
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY => sse_customer_key,
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5 => sse_customer_key_md5,
+        &*X_AMZ_REQUEST_PAYER => request_payer,
+    ]);
+
     Ok(input)
 }
 

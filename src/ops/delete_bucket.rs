@@ -5,10 +5,10 @@ use crate::dto::{DeleteBucketError, DeleteBucketOutput, DeleteBucketRequest};
 
 /// extract operation request
 pub fn extract(bucket: &str) -> Result<DeleteBucketRequest, BoxStdError> {
-    let input: DeleteBucketRequest = DeleteBucketRequest {
+    DeleteBucketRequest {
         bucket: bucket.into(),
-    };
-    Ok(input)
+    }
+    .apply(Ok)
 }
 
 impl S3Output for DeleteBucketOutput {

@@ -5,10 +5,10 @@ use crate::dto::{HeadBucketError, HeadBucketOutput, HeadBucketRequest};
 
 /// extract operation request
 pub fn extract(bucket: &str) -> Result<HeadBucketRequest, BoxStdError> {
-    let input = HeadBucketRequest {
+    HeadBucketRequest {
         bucket: bucket.into(),
-    };
-    Ok(input)
+    }
+    .apply(Ok)
 }
 
 impl S3Output for HeadBucketOutput {

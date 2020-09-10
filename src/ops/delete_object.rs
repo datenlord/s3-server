@@ -3,17 +3,36 @@
 use super::*;
 use crate::dto::{DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest};
 
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+/// `DeleteObject` request query
+struct Query {
+    /// versionId
+    #[serde(rename = "versionId")]
+    version_id: Option<String>,
+}
+
 /// extract operation request
-pub fn extract(
-    _req: &Request,
-    bucket: &str,
-    key: &str,
-) -> Result<DeleteObjectRequest, BoxStdError> {
-    let input: DeleteObjectRequest = DeleteObjectRequest {
+pub fn extract(req: &Request, bucket: &str, key: &str) -> Result<DeleteObjectRequest, BoxStdError> {
+    let mut input: DeleteObjectRequest = DeleteObjectRequest {
         bucket: bucket.into(),
         key: key.into(),
-        ..DeleteObjectRequest::default() // TODO: handle other fields
+        ..DeleteObjectRequest::default()
     };
+
+    assign_opt!(from req to input headers [
+        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION => bypass_governance_retention,
+        &*X_AMZ_MFA => mfa,
+        &*X_AMZ_REQUEST_PAYER => request_payer,
+    ]);
+
+    if let Some(query) = req.extract_query::<Query>()? {
+        assign_opt!(from query to input fields [
+            version_id,
+        ]);
+    }
+
     Ok(input)
 }
 

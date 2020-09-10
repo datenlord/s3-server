@@ -1,7 +1,52 @@
 //! [`DeleteObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObjects.html)
 
 use super::*;
-use crate::dto::{self, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest};
+use crate::dto::{
+    Delete, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest, ObjectIdentifier,
+};
+
+mod xml {
+    //! Xml repr
+
+    use serde::Deserialize;
+
+    /// Object Identifier is unique value to identify objects.
+    #[derive(Debug, Deserialize)]
+    pub struct ObjectIdentifier {
+        /// Key name of the object to delete.
+        #[serde(rename = "Key")]
+        pub key: String,
+        /// VersionId for the specific version of the object to delete.
+        #[serde(rename = "VersionId")]
+        pub version_id: Option<String>,
+    }
+
+    /// Container for the objects to delete.
+    #[derive(Debug, Deserialize)]
+    pub struct Delete {
+        /// The objects to delete.
+        #[serde(rename = "Object")]
+        pub objects: Vec<ObjectIdentifier>,
+        /// Element to enable quiet mode for the request. When you add this element, you must set its value to true.
+        #[serde(rename = "Quiet")]
+        pub quiet: Option<bool>,
+    }
+
+    impl From<ObjectIdentifier> for super::ObjectIdentifier {
+        fn from(ObjectIdentifier { key, version_id }: ObjectIdentifier) -> Self {
+            Self { key, version_id }
+        }
+    }
+
+    impl From<Delete> for super::Delete {
+        fn from(delete: Delete) -> Self {
+            Self {
+                quiet: delete.quiet,
+                objects: delete.objects.into_iter().map(Into::into).collect(),
+            }
+        }
+    }
+}
 
 /// extract operation request
 pub async fn extract(
@@ -9,20 +54,20 @@ pub async fn extract(
     body: Body,
     bucket: &str,
 ) -> Result<DeleteObjectsRequest, BoxStdError> {
-    let delete: dto::xml::Delete = deserialize_xml_body(body).await?;
+    let delete: self::xml::Delete = deserialize_xml_body(body).await?;
 
     let mut input: DeleteObjectsRequest = DeleteObjectsRequest {
         delete: delete.into(),
         bucket: bucket.into(),
-        ..dto::DeleteObjectsRequest::default()
+        ..DeleteObjectsRequest::default()
     };
 
-    assign_opt!(from req to input: headers [
-        (&*X_AMZ_MFA, mfa),
-        (&*X_AMZ_REQUEST_PAYER, request_payer),
+    assign_opt!(from req to input headers [
+        &*X_AMZ_MFA => mfa,
+        &*X_AMZ_REQUEST_PAYER => request_payer,
+        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION => bypass_governance_retention,
     ]);
 
-    // TODO: handle "x-amz-bypass-governance-retention"
     Ok(input)
 }
 

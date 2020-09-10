@@ -36,17 +36,19 @@ pub fn is_sha256_checksum(s: &str) -> bool {
 }
 
 macro_rules! assign_opt{
-    (from $src:ident to $dst:ident: fields [$($field: tt,)+])=>{$(
+    (from $src:ident to $dst:ident fields [$($field: tt,)+])=>{$(
         if $src.$field.is_some(){
             $dst.$field = $src.$field;
         }
     )+};
 
-    (from $src:ident to $dst:ident: headers [$(($name:expr,$f:ident),)+])=>{$(
-        if let Some(s) = $src.get_header_str($name)? {
-            $dst.$f = Some(s.into());
-        }
-    )+};
+    (from $req:ident to $input:ident headers [$($name:expr => $field:ident,)+])=>{{
+        let _ = $req
+        $(
+            .assign_opt_header($name, &mut $input.$field)??
+        )+
+        ;
+    }};
 }
 
 /// deserialize xml body

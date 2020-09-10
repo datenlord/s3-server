@@ -14,7 +14,7 @@ pub fn extract(
         ..ListObjectsV2Request::default()
     };
 
-    assign_opt!(from query to input: fields [
+    assign_opt!(from query to input fields [
         continuation_token,
         delimiter,
         encoding_type,
@@ -24,8 +24,8 @@ pub fn extract(
         start_after,
     ]);
 
-    assign_opt!(from req to input: headers [
-        (&*X_AMZ_REQUEST_PAYER, request_payer),
+    assign_opt!(from req to input headers [
+        &*X_AMZ_REQUEST_PAYER => request_payer,
     ]);
 
     Ok(input)

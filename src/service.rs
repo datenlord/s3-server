@@ -241,7 +241,7 @@ where
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
             S3Path::Bucket { bucket } => {
-                op_call!(create_bucket with (&req, bucket) by self.storage)
+                op_call!(create_bucket with async (&req, body, bucket) by self.storage)
             }
             S3Path::Object { bucket, key } => {
                 if let Some(copy_source) = extract_header(&req, &*X_AMZ_COPY_SOURCE)? {

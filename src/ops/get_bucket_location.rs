@@ -5,10 +5,10 @@ use crate::dto::{GetBucketLocationError, GetBucketLocationOutput, GetBucketLocat
 
 /// extract operation request
 pub fn extract(bucket: &str) -> Result<GetBucketLocationRequest, BoxStdError> {
-    let input = GetBucketLocationRequest {
+    GetBucketLocationRequest {
         bucket: bucket.into(),
-    };
-    Ok(input)
+    }
+    .apply(Ok)
 }
 
 impl S3Output for GetBucketLocationOutput {

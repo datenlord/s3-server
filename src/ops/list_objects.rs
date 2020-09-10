@@ -15,7 +15,7 @@ pub fn extract(
     };
 
     if let Some(query) = query {
-        assign_opt!(from query to input: fields [
+        assign_opt!(from query to input fields [
             delimiter,
             encoding_type,
             marker,
@@ -24,8 +24,8 @@ pub fn extract(
         ]);
     }
 
-    assign_opt!(from req to input: headers [
-        (&*X_AMZ_REQUEST_PAYER, request_payer),
+    assign_opt!(from req to input headers [
+        &*X_AMZ_REQUEST_PAYER => request_payer,
     ]);
 
     Ok(input)
