@@ -2,7 +2,6 @@
 
 use crate::utils::{is_sha256_checksum, Apply};
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use smallvec::SmallVec;
@@ -218,15 +217,14 @@ pub enum CopySource<'a> {
     },
 }
 
-#[allow(clippy::unwrap_used)] // for regex
 impl<'a> CopySource<'a> {
     /// check header pattern
     /// # Errors
     /// Returns an error if the header does not match the pattern
     pub fn try_match(header: &str) -> Result<(), ParseCopySourceError> {
-        /// x-amz-copy-source header pattern
-        static PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(".+?/.+").unwrap());
-        let pattern: &Regex = &*PATTERN;
+        // x-amz-copy-source header pattern
+        let pattern: &Regex = static_regex!(".+?/.+");
+
         if pattern.is_match(header) {
             Ok(())
         } else {
@@ -238,13 +236,12 @@ impl<'a> CopySource<'a> {
     /// # Errors
     /// Returns an error if the header is invalid
     pub fn from_header_str(header: &'a str) -> Result<Self, ParseCopySourceError> {
-        /// bucket pattern
-        static PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new("^(.+?)/(.+)$").unwrap());
-
         // TODO: support access point
         // TODO: use nom parser
 
-        let pattern: &Regex = &*PATTERN;
+        // bucket pattern
+        let pattern: &Regex = static_regex!("^(.+?)/(.+)$");
+
         match pattern.captures(header) {
             None => Err(ParseCopySourceError { _priv: () }),
             Some(captures) => {

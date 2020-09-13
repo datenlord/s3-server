@@ -57,3 +57,19 @@ pub async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> Result<T, 
     let ans: T = quick_xml::de::from_reader(&*bytes)?;
     Ok(ans)
 }
+
+macro_rules! static_regex {
+    ($re: literal) => {{
+        use once_cell::sync::Lazy;
+        use regex::Regex;
+
+        // compile-time verified regex
+        const RE: &'static str = const_str::verified_regex!($re);
+
+        // `unwrap` can provide enough debug information.
+        #[allow(clippy::unwrap_used)]
+        static PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(RE).unwrap());
+
+        &*PATTERN
+    }};
+}
