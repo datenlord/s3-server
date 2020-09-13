@@ -1,6 +1,10 @@
 //! [`GetBucketLocation`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetBucketLocation.html)
 
-use super::*;
+use crate::error::S3Result;
+use crate::output::{wrap_output, S3Output};
+use crate::utils::{Apply, ResponseExt, XmlWriterExt};
+use crate::{BoxStdError, Response};
+
 use crate::dto::{GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest};
 
 /// extract operation request

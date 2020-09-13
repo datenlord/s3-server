@@ -1,8 +1,17 @@
 //! fs implementation based on `tokio`
 
-#![allow(clippy::wildcard_imports)]
-
-use crate::dto::{self, *};
+use crate::dto::{
+    Bucket, CopyObjectError, CopyObjectOutput, CopyObjectRequest, CopyObjectResult,
+    CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
+    DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
+    DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
+    DeletedObject, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
+    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
+    HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
+    ListBucketsOutput, ListBucketsRequest, ListObjectsError, ListObjectsOutput, ListObjectsRequest,
+    ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request, Object, PutObjectError,
+    PutObjectOutput, PutObjectRequest,
+};
 
 use crate::{
     error::{S3Error, S3Result},
@@ -185,7 +194,7 @@ impl S3Storage for FileSystem {
                 tokio::fs::remove_file(path).await?;
                 deleted.push(DeletedObject {
                     key: Some(key),
-                    ..dto::DeletedObject::default()
+                    ..DeletedObject::default()
                 });
             }
             let output = DeleteObjectsOutput {

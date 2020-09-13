@@ -1,15 +1,5 @@
 //! S3 operations
 
-use crate::{
-    header::names::*,
-    output::{wrap_output, XmlErrorResponse},
-    query::GetQuery,
-    utils::{deserialize_xml_body, time, Apply, RequestExt, ResponseExt, XmlWriterExt},
-    BoxStdError, Request, Response, S3ErrorCode, S3Output, S3Result,
-};
-
-use hyper::{header::*, Body, StatusCode};
-
 pub mod copy_object;
 pub mod create_bucket;
 pub mod delete_bucket;

@@ -40,7 +40,6 @@
     clippy::module_name_repetitions, // Allowed by default
     unreachable_pub, // Conflicts with root-controlled visibility
     clippy::redundant_pub_crate, // Conflicts with root-controlled visibility
-    clippy::wildcard_imports, // For dto, header names and `super::*`
 )]
 #![cfg_attr(test, allow(
     clippy::panic, // Panic when fatal failures occur
@@ -77,7 +76,7 @@ pub mod fs;
 #[cfg(any(feature = "rt-async-std"))]
 pub mod compat;
 
-use hyper::Body;
+pub(crate) use hyper::Body;
 
 /// Request type
 pub(crate) type Request = hyper::Request<Body>;

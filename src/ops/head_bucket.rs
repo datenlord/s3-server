@@ -1,6 +1,11 @@
 //! [`HeadBucket`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_HeadBucket.html)
 
-use super::*;
+use crate::error::S3Result;
+use crate::error_code::S3ErrorCode;
+use crate::output::{S3Output, XmlErrorResponse};
+use crate::utils::Apply;
+use crate::{Body, BoxStdError, Response};
+
 use crate::dto::{HeadBucketError, HeadBucketOutput, HeadBucketRequest};
 
 /// extract operation request

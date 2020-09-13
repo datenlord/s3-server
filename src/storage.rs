@@ -1,8 +1,16 @@
 //! Trait representing the capabilities of the Amazon S3 API at server side
 
-#![allow(clippy::wildcard_imports)]
-
-use crate::dto::*;
+use crate::dto::{
+    CopyObjectError, CopyObjectOutput, CopyObjectRequest, CreateBucketError, CreateBucketOutput,
+    CreateBucketRequest, DeleteBucketError, DeleteBucketOutput, DeleteBucketRequest,
+    DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest, DeleteObjectsError,
+    DeleteObjectsOutput, DeleteObjectsRequest, GetBucketLocationError, GetBucketLocationOutput,
+    GetBucketLocationRequest, GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError,
+    HeadBucketOutput, HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest,
+    ListBucketsError, ListBucketsOutput, ListBucketsRequest, ListObjectsError, ListObjectsOutput,
+    ListObjectsRequest, ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request,
+    PutObjectError, PutObjectOutput, PutObjectRequest,
+};
 use crate::error::S3Result;
 
 use async_trait::async_trait;

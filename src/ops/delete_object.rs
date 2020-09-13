@@ -1,9 +1,18 @@
 //! [`DeleteObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html)
 
-use super::*;
-use crate::dto::{DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest};
+use crate::error::S3Result;
+use crate::output::{wrap_output, S3Output};
+use crate::utils::{RequestExt, ResponseExt};
+use crate::{BoxStdError, Request, Response};
 
+use hyper::StatusCode;
 use serde::Deserialize;
+
+use crate::dto::{DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest};
+use crate::header::names::{
+    X_AMZ_BYPASS_GOVERNANCE_RETENTION, X_AMZ_DELETE_MARKER, X_AMZ_MFA, X_AMZ_REQUEST_CHARGED,
+    X_AMZ_REQUEST_PAYER, X_AMZ_VERSION_ID,
+};
 
 #[derive(Debug, Deserialize)]
 /// `DeleteObject` request query

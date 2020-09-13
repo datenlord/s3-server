@@ -1,9 +1,27 @@
 //! [`PutObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
 
-use super::*;
-use crate::dto::{ByteStream, PutObjectError, PutObjectOutput, PutObjectRequest};
+use crate::error::S3Result;
+use crate::output::{wrap_output, S3Output};
+use crate::utils::{Apply, RequestExt, ResponseExt};
+use crate::{Body, BoxStdError, Request, Response};
+
 use futures::stream::StreamExt;
 use std::io;
+
+use crate::dto::{ByteStream, PutObjectError, PutObjectOutput, PutObjectRequest};
+use crate::header::names::{
+    CONTENT_MD5, X_AMZ_ACL, X_AMZ_EXPIRATION, X_AMZ_GRANT_FULL_CONTROL, X_AMZ_GRANT_READ,
+    X_AMZ_GRANT_READ_ACP, X_AMZ_GRANT_WRITE_ACP, X_AMZ_OBJECT_LOCK_LEGAL_HOLD,
+    X_AMZ_OBJECT_LOCK_MODE, X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE, X_AMZ_REQUEST_CHARGED,
+    X_AMZ_REQUEST_PAYER, X_AMZ_SERVER_SIDE_ENCRYPTION, X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
+    X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT, X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
+    X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY, X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
+    X_AMZ_STORAGE_CLASS, X_AMZ_TAGGING, X_AMZ_VERSION_ID, X_AMZ_WEBSITE_REDIRECT_LOCATION,
+};
+use hyper::header::{
+    CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_ENCODING, CONTENT_LANGUAGE, CONTENT_LENGTH,
+    CONTENT_TYPE, ETAG, EXPIRES,
+};
 
 /// extract operation request
 #[allow(clippy::cognitive_complexity)]

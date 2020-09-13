@@ -1,7 +1,26 @@
 //! [`GetObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)
 
-use super::*;
+use crate::error::S3Result;
+use crate::error_code::S3ErrorCode;
+use crate::output::{wrap_output, S3Output, XmlErrorResponse};
+use crate::utils::{time, RequestExt, ResponseExt};
+use crate::{Body, BoxStdError, Request, Response};
+
 use crate::dto::{GetObjectError, GetObjectOutput, GetObjectRequest};
+use crate::header::names::{
+    X_AMZ_DELETE_MARKER, X_AMZ_EXPIRATION, X_AMZ_MISSING_META, X_AMZ_MP_PARTS_COUNT,
+    X_AMZ_OBJECT_LOCK_LEGAL_HOLD, X_AMZ_OBJECT_LOCK_MODE, X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,
+    X_AMZ_REPLICATION_STATUS, X_AMZ_REQUEST_CHARGED, X_AMZ_REQUEST_PAYER, X_AMZ_RESTORE,
+    X_AMZ_SERVER_SIDE_ENCRYPTION, X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
+    X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM, X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
+    X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5, X_AMZ_STORAGE_CLASS, X_AMZ_TAGGING_COUNT,
+    X_AMZ_VERSION_ID, X_AMZ_WEBSITE_REDIRECT_LOCATION,
+};
+use hyper::header::{
+    ACCEPT_RANGES, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_ENCODING, CONTENT_LANGUAGE,
+    CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, ETAG, EXPIRES, IF_MATCH, IF_MODIFIED_SINCE,
+    IF_NONE_MATCH, IF_UNMODIFIED_SINCE, LAST_MODIFIED, RANGE,
+};
 
 /// extract operation request
 pub fn extract(req: &Request, bucket: &str, key: &str) -> Result<GetObjectRequest, BoxStdError> {

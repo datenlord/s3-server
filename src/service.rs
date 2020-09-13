@@ -2,7 +2,7 @@
 
 use crate::{
     error::{S3Error, S3Result},
-    header::names::*,
+    header::names::X_AMZ_COPY_SOURCE,
     ops,
     output::S3Output,
     path::S3Path,
@@ -21,7 +21,7 @@ use std::{
 };
 
 use futures::future::BoxFuture;
-use hyper::{header::*, Method};
+use hyper::{header::AsHeaderName, Method};
 use log::{debug, error};
 use serde::de::DeserializeOwned;
 
