@@ -1,5 +1,6 @@
 //! utils
 
+mod also;
 mod apply;
 mod byte_stream;
 mod request;
@@ -11,6 +12,7 @@ use serde::de::DeserializeOwned;
 
 use crate::BoxStdError;
 
+pub use self::also::Also;
 pub use self::apply::Apply;
 pub use self::byte_stream::ByteStream;
 pub use self::request::RequestExt;
