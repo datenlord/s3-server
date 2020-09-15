@@ -8,7 +8,7 @@ use smallvec::SmallVec;
 
 /// `x-amz-content-sha256`
 ///
-/// See [Common Request Headers](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/API/RESTCommonRequestHeaders.html)
+/// See [Common Request Headers](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonRequestHeaders.html)
 #[derive(Debug)]
 pub enum AmzContentSha256<'a> {
     /// `STREAMING-AWS4-HMAC-SHA256-PAYLOAD`
@@ -49,7 +49,7 @@ impl<'a> AmzContentSha256<'a> {
     }
 }
 
-/// See [sigv4-auth-using-authorization-header](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
+/// See [sigv4-auth-using-authorization-header](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct AuthorizationV4<'a> {
     /// The algorithm that was used to calculate the signature.
@@ -70,7 +70,7 @@ pub(super) struct AuthorizationV4<'a> {
 /// This string has the following form:
 /// `<your-access-key-id>/<date>/<aws-region>/<aws-service>/aws4_request`
 ///
-/// See [sigv4-auth-using-authorization-header](https://docs.aws.amazon.com/zh_cn/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
+/// See [sigv4-auth-using-authorization-header](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct CredentialV4<'a> {
     /// access key id
