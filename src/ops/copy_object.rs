@@ -27,7 +27,6 @@ use hyper::header::{
 };
 
 /// extract operation request
-#[allow(clippy::cognitive_complexity)]
 pub fn extract(
     req: &Request,
     bucket: &str,

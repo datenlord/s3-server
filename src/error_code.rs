@@ -279,7 +279,7 @@ impl Display for S3ErrorCode {
 }
 impl S3ErrorCode {
     /// Returns a corresponding status code of the error code
-    #[allow(clippy::match_same_arms)]
+    #[allow(clippy::match_same_arms)] // keep alphabet order for human readability
     #[must_use]
     pub const fn as_status_code(self) -> Option<StatusCode> {
         match self {
@@ -372,7 +372,7 @@ impl S3ErrorCode {
     /// Returns a corresponding string of the error code
     #[must_use]
     pub const fn as_static_str(self) -> &'static str {
-        macro_rules! map_str{
+        macro_rules! map_variant_to_str{
             [$($v:tt,)+]=>{
                 match self {
                     $(
@@ -382,7 +382,7 @@ impl S3ErrorCode {
             }
         }
 
-        map_str![
+        map_variant_to_str![
             AccessDenied,
             AccountProblem,
             AllAccessDisabled,

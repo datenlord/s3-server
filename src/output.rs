@@ -38,9 +38,7 @@ where
 }
 
 /// helper function for error converting
-pub(crate) fn wrap_output(
-    f: impl FnOnce(&mut Response) -> Result<(), BoxStdError>,
-) -> S3Result<Response> {
+pub fn wrap_output(f: impl FnOnce(&mut Response) -> Result<(), BoxStdError>) -> S3Result<Response> {
     let mut res = Response::new(Body::empty());
     match f(&mut res) {
         Ok(()) => Ok(res),
@@ -50,7 +48,7 @@ pub(crate) fn wrap_output(
 
 /// Type representing an error response
 #[derive(Debug)]
-pub(crate) struct XmlErrorResponse {
+pub struct XmlErrorResponse {
     /// code
     code: S3ErrorCode,
     /// message

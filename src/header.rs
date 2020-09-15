@@ -98,8 +98,19 @@ impl<'a> AuthorizationV4<'a> {
         auth: &'a str,
     ) -> Result<AuthorizationV4<'a>, ParseAuthorizationError> {
         /// nom parser
-        #[allow(clippy::shadow_reuse)]
-        fn parse(input: &str) -> nom::IResult<&str, AuthorizationV4<'_>> {
+        fn parse(mut input: &str) -> nom::IResult<&str, AuthorizationV4<'_>> {
+            macro_rules! parse {
+                (mut $input:expr => $f:expr => $id:pat ) => {
+                    let $id = $f($input)?.apply(|(__input, output)| {
+                        $input = __input;
+                        output
+                    });
+                };
+                ($input:expr => $f:expr => $id:pat ) => {
+                    let $id = $f($input)?.apply(|(_, output)| output);
+                };
+            }
+
             use chrono::{TimeZone, Utc};
             use nom::{
                 bytes::complete::{tag, take, take_till, take_till1},
@@ -112,15 +123,13 @@ impl<'a> AuthorizationV4<'a> {
             let space_till1 = take_till1(|c: char| c.is_ascii_whitespace());
             let space_till0 = take_till(|c: char| c.is_ascii_whitespace());
 
-            let (input, algorithm) = space_till1(input)?;
+            parse!(mut input => space_till1 => algorithm);
+            parse!(mut input => multispace1 => _);
+            parse!(mut input => tag("Credential=") => _);
+            parse!(mut input => slash_tail => access_key_id);
+            parse!(mut input => slash_tail => date);
 
-            let (input, _) = multispace1(input)?;
-
-            let (input, _) = tag("Credential=")(input)?;
-            let (input, access_key_id) = slash_tail(input)?;
-            let (input, date) = slash_tail(input)?;
-
-            let _ = verify(
+            let verify_date = verify(
                 all_consuming(tuple((take(4_usize), take(2_usize), take(2_usize)))),
                 |&(y, m, d): &(&str, &str, &str)| {
                     macro_rules! parse_num {
@@ -136,32 +145,30 @@ impl<'a> AuthorizationV4<'a> {
                         chrono::LocalResult::Single(_)
                     )
                 },
-            )(date)?;
+            );
 
-            let (input, aws_region) = slash_tail(input)?;
-            let (input, aws_service) = slash_tail(input)?;
-            let (input, _) = tag("aws4_request,")(input)?;
+            parse!(date => verify_date => _);
 
-            let (input, _) = multispace1(input)?;
+            parse!(mut input => slash_tail => aws_region);
+            parse!(mut input => slash_tail => aws_service);
+            parse!(mut input => tag("aws4_request,") => _);
+            parse!(mut input => multispace1 => _);
+            parse!(mut input => tag("SignedHeaders=") => _);
 
-            let (mut input, _) = tag("SignedHeaders=")(input)?;
             let mut headers: SmallVec<[&str; 16]> = SmallVec::new();
             loop {
-                let (remain, (header, sep)) =
-                    tuple((take_till1(|c| c == ';' || c == ','), take(1_usize)))(input)?;
-
-                input = remain;
+                let expect_header = tuple((take_till1(|c| c == ';' || c == ','), take(1_usize)));
+                parse!(mut input => expect_header => (header, sep));
                 headers.push(header);
                 if sep == "," {
                     break;
                 }
             }
 
-            let (input, _) = multispace1(input)?;
-
-            let (input, _) = tag("Signature=")(input)?;
-            let (input, signature) = space_till0(input)?;
-            let (input, _) = all_consuming(multispace0)(input)?;
+            parse!(mut input => multispace1 => _);
+            parse!(mut input => tag("Signature=") => _);
+            parse!(mut input => space_till0 => signature);
+            parse!(mut input => all_consuming(multispace0) => _);
 
             let ans = AuthorizationV4 {
                 algorithm,

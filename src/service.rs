@@ -104,7 +104,7 @@ fn wrap_handle_sync<T>(f: impl FnOnce() -> Result<T, BoxStdError>) -> S3Result<T
     f().map_err(|e| S3Error::InvalidRequest(e))
 }
 
-macro_rules! op_call{
+macro_rules! call_s3_operation{
     ($op:ident with () by $storage:expr)  => {{
         let input = wrap_handle_sync(ops::$op::extract)?;
         $storage.$op(input).await.try_into_response()
@@ -184,25 +184,31 @@ where
     async fn handle_get(&self, req: Request) -> S3Result<Response> {
         let path = parse_path(&req)?;
         match path {
-            S3Path::Root => op_call!(list_buckets with () by self.storage),
+            S3Path::Root => call_s3_operation!(list_buckets with () by self.storage),
             S3Path::Bucket { bucket } => {
                 let query = match extract_query::<GetQuery>(&req)? {
-                    None => return op_call!(list_objects with (&req, None, bucket) by self.storage),
+                    None => {
+                        return call_s3_operation!(list_objects with (&req, None, bucket) by self.storage)
+                    }
                     Some(query) => query,
                 };
 
                 if query.location.is_some() {
-                    return op_call!(get_bucket_location with (bucket) by self.storage);
+                    return call_s3_operation!(get_bucket_location with (bucket) by self.storage);
                 }
 
                 match query.list_type {
-                    None => op_call!(list_objects with (&req,Some(query),bucket) by self.storage),
-                    Some(2) => op_call!(list_objects_v2 with (&req,query,bucket) by self.storage),
+                    None => {
+                        call_s3_operation!(list_objects with (&req,Some(query),bucket) by self.storage)
+                    }
+                    Some(2) => {
+                        call_s3_operation!(list_objects_v2 with (&req,query,bucket) by self.storage)
+                    }
                     Some(_) => Err(S3Error::NotSupported),
                 }
             }
             S3Path::Object { bucket, key } => {
-                op_call!(get_object with (&req, bucket, key) by self.storage)
+                call_s3_operation!(get_object with (&req, bucket, key) by self.storage)
             }
         }
     }
@@ -220,7 +226,7 @@ where
                 };
 
                 if query.delete.is_some() {
-                    return op_call!(delete_objects with async (&req, body, bucket) by self.storage);
+                    return call_s3_operation!(delete_objects with async (&req, body, bucket) by self.storage);
                 }
 
                 // TODO: impl handler
@@ -241,13 +247,13 @@ where
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
             S3Path::Bucket { bucket } => {
-                op_call!(create_bucket with async (&req, body, bucket) by self.storage)
+                call_s3_operation!(create_bucket with async (&req, body, bucket) by self.storage)
             }
             S3Path::Object { bucket, key } => {
                 if let Some(copy_source) = extract_header(&req, &*X_AMZ_COPY_SOURCE)? {
-                    return op_call!(copy_object with (&req, bucket,key,copy_source) by self.storage);
+                    return call_s3_operation!(copy_object with (&req, bucket,key,copy_source) by self.storage);
                 }
-                op_call!(put_object with (&req,body,bucket,key) by self.storage)
+                call_s3_operation!(put_object with (&req,body,bucket,key) by self.storage)
             }
         }
     }
@@ -257,9 +263,11 @@ where
         let path = parse_path(&req)?;
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
-            S3Path::Bucket { bucket } => op_call!(delete_bucket with (bucket) by self.storage),
+            S3Path::Bucket { bucket } => {
+                call_s3_operation!(delete_bucket with (bucket) by self.storage)
+            }
             S3Path::Object { bucket, key } => {
-                op_call!(delete_object with (&req, bucket,key) by self.storage)
+                call_s3_operation!(delete_object with (&req, bucket,key) by self.storage)
             }
         }
     }
@@ -269,9 +277,11 @@ where
         let path = parse_path(&req)?;
         match path {
             S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
-            S3Path::Bucket { bucket } => op_call!(head_bucket with (bucket) by self.storage),
+            S3Path::Bucket { bucket } => {
+                call_s3_operation!(head_bucket with (bucket) by self.storage)
+            }
             S3Path::Object { bucket, key } => {
-                op_call!(head_object with (&req, bucket, key) by self.storage)
+                call_s3_operation!(head_object with (&req, bucket, key) by self.storage)
             }
         }
     }

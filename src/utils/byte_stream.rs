@@ -1,5 +1,7 @@
 //! `ByteStream`
 
+#![allow(clippy::redundant_pub_crate)]
+
 use bytes::Bytes;
 use futures::stream::Stream;
 use pin_project_lite::pin_project;

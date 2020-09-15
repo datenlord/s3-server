@@ -19,16 +19,6 @@ pub use self::xml::XmlWriterExt;
 
 pub mod time;
 
-#[allow(unused_macros)]
-macro_rules! cfg_rt_tokio{
-    {$($item:item)*}=>{
-        $(
-            #[cfg(feature = "rt-tokio")]
-            $item
-        )*
-    }
-}
-
 /// verify sha256 checksum string
 pub fn is_sha256_checksum(s: &str) -> bool {
     let is_lowercase_hex = |&c: &u8| c.is_ascii_digit() || (b'a'..=b'f').contains(&c);
@@ -67,8 +57,8 @@ macro_rules! static_regex {
         const RE: &'static str = const_str::verified_regex!($re);
 
         // `unwrap` can provide enough debug information.
-        #[allow(clippy::unwrap_used)]
-        static PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(RE).unwrap());
+        static PATTERN: Lazy<Regex> =
+            Lazy::new(|| Regex::new(RE).unwrap_or_else(|e| panic!("static regex error: {}", e)));
 
         &*PATTERN
     }};
