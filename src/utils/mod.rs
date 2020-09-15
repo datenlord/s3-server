@@ -35,7 +35,7 @@ macro_rules! assign_opt{
     (from $req:ident to $input:ident headers [$($name:expr => $field:ident,)+])=>{{
         let _ = $req
         $(
-            .assign_opt_header($name, &mut $input.$field)??
+            .assign_opt_header($name, &mut $input.$field)?
         )+
         ;
     }};

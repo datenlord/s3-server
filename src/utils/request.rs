@@ -1,6 +1,6 @@
 //! request util
 
-use crate::{path::ParseS3PathError, path::S3Path, Request};
+use crate::{path::ParseS3PathError, path::S3Path, BoxStdError, Request};
 
 use hyper::{
     header::{AsHeaderName, HeaderValue, ToStrError},
@@ -28,9 +28,10 @@ pub trait RequestExt {
         &self,
         name: impl AsHeaderName,
         opt: &mut Option<T>,
-    ) -> Result<Result<&Self, T::Err>, ToStrError>
+    ) -> Result<&Self, BoxStdError>
     where
-        T: FromStr;
+        T: FromStr,
+        T::Err: std::error::Error + Send + Sync + 'static;
 }
 
 impl RequestExt for Request {
@@ -60,17 +61,16 @@ impl RequestExt for Request {
         &self,
         name: impl AsHeaderName,
         opt: &mut Option<T>,
-    ) -> Result<Result<&Self, T::Err>, ToStrError>
+    ) -> Result<&Self, BoxStdError>
     where
         T: FromStr,
+        T::Err: std::error::Error + Send + Sync + 'static,
     {
         if let Some(s) = self.get_header_str(name)? {
-            match s.parse() {
-                Ok(v) => *opt = Some(v),
-                Err(e) => return Ok(Err(e)),
-            }
+            let v = s.parse()?;
+            *opt = Some(v);
         }
 
-        Ok(Ok(self))
+        Ok(self)
     }
 }
