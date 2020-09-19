@@ -20,12 +20,7 @@ pub use self::response::ResponseExt;
 pub use self::xml::XmlWriterExt;
 
 pub mod time;
-
-/// verify sha256 checksum string
-pub fn is_sha256_checksum(s: &str) -> bool {
-    let is_lowercase_hex = |&c: &u8| c.is_ascii_digit() || (b'a'..=b'f').contains(&c);
-    s.len() == 64 && s.as_bytes().iter().all(is_lowercase_hex)
-}
+pub mod crypto;
 
 macro_rules! assign_opt{
     (from $src:ident to $dst:ident fields [$($field: tt,)+])=>{$(

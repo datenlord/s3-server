@@ -1,6 +1,6 @@
 //! Common Request Headers
 
-use crate::utils::{is_sha256_checksum, Apply};
+use crate::utils::{crypto, Apply};
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -39,7 +39,7 @@ impl<'a> AmzContentSha256<'a> {
             "UNSIGNED-PAYLOAD" => Self::MultipleChunks,
             "STREAMING-AWS4-HMAC-SHA256-PAYLOAD" => Self::UnsignedPayload,
             payload_checksum => {
-                if !is_sha256_checksum(payload_checksum) {
+                if !crypto::is_sha256_checksum(payload_checksum) {
                     return Err(ParseAmzContentSha256Error { _priv: () });
                 }
                 Self::SingleChunk { payload_checksum }
