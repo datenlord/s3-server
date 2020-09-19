@@ -3,6 +3,7 @@
 mod also;
 mod apply;
 mod byte_stream;
+mod ordered_headers;
 mod request;
 mod response;
 mod xml;
@@ -15,12 +16,13 @@ use crate::BoxStdError;
 pub use self::also::Also;
 pub use self::apply::Apply;
 pub use self::byte_stream::ByteStream;
+pub use self::ordered_headers::OrderedHeaders;
 pub use self::request::RequestExt;
 pub use self::response::ResponseExt;
 pub use self::xml::XmlWriterExt;
 
-pub mod time;
 pub mod crypto;
+pub mod time;
 
 /// deserialize xml body
 pub async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> Result<T, BoxStdError> {
