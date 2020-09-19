@@ -56,6 +56,7 @@ mod error_code;
 mod ops;
 mod output;
 mod service;
+mod signature_v4;
 mod storage;
 
 pub use self::error::{S3Error, S3Result};
