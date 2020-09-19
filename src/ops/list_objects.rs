@@ -22,18 +22,24 @@ pub fn extract(
     };
 
     if let Some(query) = query {
-        assign_opt!(from query to input fields [
-            delimiter,
-            encoding_type,
-            marker,
-            max_keys,
-            prefix,
-        ]);
+        if query.delimiter.is_some() {
+            input.delimiter = query.delimiter;
+        }
+        if query.encoding_type.is_some() {
+            input.encoding_type = query.encoding_type;
+        }
+        if query.marker.is_some() {
+            input.marker = query.marker;
+        }
+        if query.max_keys.is_some() {
+            input.max_keys = query.max_keys;
+        }
+        if query.prefix.is_some() {
+            input.prefix = query.prefix;
+        }
     }
 
-    assign_opt!(from req to input headers [
-        &*X_AMZ_REQUEST_PAYER => request_payer,
-    ]);
+    req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
 
     Ok(input)
 }

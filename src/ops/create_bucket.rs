@@ -50,15 +50,16 @@ pub async fn extract(
         ..CreateBucketRequest::default()
     };
 
-    assign_opt!(from req to input headers [
-        &*X_AMZ_ACL => acl,
-        &*X_AMZ_GRANT_FULL_CONTROL =>  grant_full_control,
-        &*X_AMZ_GRANT_READ =>  grant_read,
-        &*X_AMZ_GRANT_READ_ACP =>  grant_read_acp,
-        &*X_AMZ_GRANT_WRITE => grant_write,
-        &*X_AMZ_GRANT_WRITE_ACP =>  grant_write_acp,
-        &*X_AMZ_BUCKET_OBJECT_LOCK_ENABLED => object_lock_enabled_for_bucket,
-    ]);
+    req.assign_from_optional_header(&*X_AMZ_ACL, &mut input.acl)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_FULL_CONTROL, &mut input.grant_full_control)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_READ, &mut input.grant_read)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_READ_ACP, &mut input.grant_read_acp)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_WRITE, &mut input.grant_write)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_WRITE_ACP, &mut input.grant_write_acp)?;
+    req.assign_from_optional_header(
+        &*X_AMZ_BUCKET_OBJECT_LOCK_ENABLED,
+        &mut input.object_lock_enabled_for_bucket,
+    )?;
 
     Ok(input)
 }
@@ -66,7 +67,7 @@ pub async fn extract(
 impl S3Output for CreateBucketOutput {
     fn try_into_response(self) -> S3Result<Response> {
         wrap_output(|res| {
-            res.set_opt_header(|| LOCATION, self.location)?;
+            res.set_optional_header(|| LOCATION, self.location)?;
             Ok(())
         })
     }

@@ -42,41 +42,87 @@ pub fn extract(
         ..CopyObjectRequest::default()
     };
 
-    assign_opt!(from req to input headers [
-        &*X_AMZ_ACL => acl,
-        CACHE_CONTROL => cache_control,
-        CONTENT_DISPOSITION => content_disposition,
-        CONTENT_ENCODING => content_encoding,
-        CONTENT_LANGUAGE => content_language,
-        CONTENT_TYPE => content_type,
-        &*X_AMZ_COPY_SOURCE_IF_MATCH => copy_source_if_match,
-        &*X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE => copy_source_if_modified_since,
-        &*X_AMZ_COPY_SOURCE_IF_NONE_MATCH => copy_source_if_none_match,
-        &*X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE => copy_source_if_unmodified_since,
-        EXPIRES => expires,
-        &*X_AMZ_GRANT_FULL_CONTROL => grant_full_control,
-        &*X_AMZ_GRANT_READ => grant_read,
-        &*X_AMZ_GRANT_READ_ACP => grant_read_acp,
-        &*X_AMZ_GRANT_WRITE_ACP => grant_write_acp,
-        &*X_AMZ_METADATA_DIRECTIVE => metadata_directive,
-        &*X_AMZ_TAGGING_DIRECTIVE => tagging_directive,
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION => server_side_encryption,
-        &*X_AMZ_STORAGE_CLASS => storage_class,
-        &*X_AMZ_WEBSITE_REDIRECT_LOCATION => website_redirect_location,
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM => sse_customer_algorithm,
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY => sse_customer_key,
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5 => sse_customer_key_md5,
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID => ssekms_key_id,
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT => ssekms_encryption_context,
-        &*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM => copy_source_sse_customer_algorithm,
-        &*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY => copy_source_sse_customer_key,
-        &*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5 => copy_source_sse_customer_key_md5,
-        &*X_AMZ_REQUEST_PAYER => request_payer,
-        &*X_AMZ_TAGGING => tagging,
-        &*X_AMZ_OBJECT_LOCK_MODE => object_lock_mode,
-        &*X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE => object_lock_retain_until_date,
-        &*X_AMZ_OBJECT_LOCK_LEGAL_HOLD => object_lock_legal_hold_status,
-    ]);
+    req.assign_from_optional_header(&*X_AMZ_ACL, &mut input.acl)?;
+    req.assign_from_optional_header(CACHE_CONTROL, &mut input.cache_control)?;
+    req.assign_from_optional_header(CONTENT_DISPOSITION, &mut input.content_disposition)?;
+    req.assign_from_optional_header(CONTENT_ENCODING, &mut input.content_encoding)?;
+    req.assign_from_optional_header(CONTENT_LANGUAGE, &mut input.content_language)?;
+    req.assign_from_optional_header(CONTENT_TYPE, &mut input.content_type)?;
+    req.assign_from_optional_header(
+        &*X_AMZ_COPY_SOURCE_IF_MATCH,
+        &mut input.copy_source_if_match,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE,
+        &mut input.copy_source_if_modified_since,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_COPY_SOURCE_IF_NONE_MATCH,
+        &mut input.copy_source_if_none_match,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE,
+        &mut input.copy_source_if_unmodified_since,
+    )?;
+    req.assign_from_optional_header(EXPIRES, &mut input.expires)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_FULL_CONTROL, &mut input.grant_full_control)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_READ, &mut input.grant_read)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_READ_ACP, &mut input.grant_read_acp)?;
+    req.assign_from_optional_header(&*X_AMZ_GRANT_WRITE_ACP, &mut input.grant_write_acp)?;
+    req.assign_from_optional_header(&*X_AMZ_METADATA_DIRECTIVE, &mut input.metadata_directive)?;
+    req.assign_from_optional_header(&*X_AMZ_TAGGING_DIRECTIVE, &mut input.tagging_directive)?;
+    req.assign_from_optional_header(
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION,
+        &mut input.server_side_encryption,
+    )?;
+    req.assign_from_optional_header(&*X_AMZ_STORAGE_CLASS, &mut input.storage_class)?;
+    req.assign_from_optional_header(
+        &*X_AMZ_WEBSITE_REDIRECT_LOCATION,
+        &mut input.website_redirect_location,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
+        &mut input.sse_customer_algorithm,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
+        &mut input.sse_customer_key,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
+        &mut input.sse_customer_key_md5,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
+        &mut input.ssekms_key_id,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT,
+        &mut input.ssekms_encryption_context,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
+        &mut input.copy_source_sse_customer_algorithm,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
+        &mut input.copy_source_sse_customer_key,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
+        &mut input.copy_source_sse_customer_key_md5,
+    )?;
+    req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
+    req.assign_from_optional_header(&*X_AMZ_TAGGING, &mut input.tagging)?;
+    req.assign_from_optional_header(&*X_AMZ_OBJECT_LOCK_MODE, &mut input.object_lock_mode)?;
+    req.assign_from_optional_header(
+        &*X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,
+        &mut input.object_lock_retain_until_date,
+    )?;
+    req.assign_from_optional_header(
+        &*X_AMZ_OBJECT_LOCK_LEGAL_HOLD,
+        &mut input.object_lock_legal_hold_status,
+    )?;
 
     Ok(input)
 }
@@ -84,33 +130,33 @@ pub fn extract(
 impl S3Output for CopyObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {
         wrap_output(|res| {
-            res.set_opt_header(|| X_AMZ_EXPIRATION.clone(), self.expiration)?;
-            res.set_opt_header(
+            res.set_optional_header(|| X_AMZ_EXPIRATION.clone(), self.expiration)?;
+            res.set_optional_header(
                 || X_AMZ_COPY_SOURCE_VERSION_ID.clone(),
                 self.copy_source_version_id,
             )?;
-            res.set_opt_header(|| X_AMZ_VERSION_ID.clone(), self.version_id)?;
-            res.set_opt_header(
+            res.set_optional_header(|| X_AMZ_VERSION_ID.clone(), self.version_id)?;
+            res.set_optional_header(
                 || X_AMZ_SERVER_SIDE_ENCRYPTION.clone(),
                 self.server_side_encryption,
             )?;
-            res.set_opt_header(
+            res.set_optional_header(
                 || X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM.clone(),
                 self.sse_customer_algorithm,
             )?;
-            res.set_opt_header(
+            res.set_optional_header(
                 || X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5.clone(),
                 self.sse_customer_key_md5,
             )?;
-            res.set_opt_header(
+            res.set_optional_header(
                 || X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID.clone(),
                 self.ssekms_key_id,
             )?;
-            res.set_opt_header(
+            res.set_optional_header(
                 || X_AMZ_SERVER_SIDE_ENCRYPTION_CONTEXT.clone(),
                 self.ssekms_encryption_context,
             )?;
-            res.set_opt_header(|| X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
+            res.set_optional_header(|| X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
 
             let copy_object_result = self.copy_object_result;
 

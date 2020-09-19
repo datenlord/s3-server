@@ -24,11 +24,11 @@ pub trait RequestExt {
     fn extract_s3_path(&self) -> Result<S3Path<'_>, ParseS3PathError>;
 
     /// assign opt header
-    fn assign_opt_header<T>(
+    fn assign_from_optional_header<T>(
         &self,
         name: impl AsHeaderName,
         opt: &mut Option<T>,
-    ) -> Result<&Self, BoxStdError>
+    ) -> Result<(), BoxStdError>
     where
         T: FromStr,
         T::Err: std::error::Error + Send + Sync + 'static;
@@ -57,11 +57,11 @@ impl RequestExt for Request {
         S3Path::try_from_path(self.uri().path())
     }
 
-    fn assign_opt_header<T>(
+    fn assign_from_optional_header<T>(
         &self,
         name: impl AsHeaderName,
         opt: &mut Option<T>,
-    ) -> Result<&Self, BoxStdError>
+    ) -> Result<(), BoxStdError>
     where
         T: FromStr,
         T::Err: std::error::Error + Send + Sync + 'static,
@@ -70,7 +70,6 @@ impl RequestExt for Request {
             let v = s.parse()?;
             *opt = Some(v);
         }
-
-        Ok(self)
+        Ok(())
     }
 }

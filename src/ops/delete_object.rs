@@ -30,16 +30,17 @@ pub fn extract(req: &Request, bucket: &str, key: &str) -> Result<DeleteObjectReq
         ..DeleteObjectRequest::default()
     };
 
-    assign_opt!(from req to input headers [
-        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION => bypass_governance_retention,
-        &*X_AMZ_MFA => mfa,
-        &*X_AMZ_REQUEST_PAYER => request_payer,
-    ]);
+    req.assign_from_optional_header(
+        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION,
+        &mut input.bypass_governance_retention,
+    )?;
+    req.assign_from_optional_header(&*X_AMZ_MFA, &mut input.mfa)?;
+    req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
 
     if let Some(query) = req.extract_query::<Query>()? {
-        assign_opt!(from query to input fields [
-            version_id,
-        ]);
+        if query.version_id.is_some() {
+            input.version_id = query.version_id;
+        }
     }
 
     Ok(input)
@@ -49,12 +50,12 @@ impl S3Output for DeleteObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {
         wrap_output(|res| {
             res.set_status(StatusCode::NO_CONTENT);
-            res.set_opt_header(
+            res.set_optional_header(
                 || X_AMZ_DELETE_MARKER.clone(),
                 self.delete_marker.map(|b| b.to_string()),
             )?;
-            res.set_opt_header(|| X_AMZ_VERSION_ID.clone(), self.version_id)?;
-            res.set_opt_header(|| X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
+            res.set_optional_header(|| X_AMZ_VERSION_ID.clone(), self.version_id)?;
+            res.set_optional_header(|| X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
             Ok(())
         })
     }

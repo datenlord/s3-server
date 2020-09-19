@@ -21,19 +21,29 @@ pub fn extract(
         ..ListObjectsV2Request::default()
     };
 
-    assign_opt!(from query to input fields [
-        continuation_token,
-        delimiter,
-        encoding_type,
-        fetch_owner,
-        max_keys,
-        prefix,
-        start_after,
-    ]);
+    if query.continuation_token.is_some() {
+        input.continuation_token = query.continuation_token;
+    }
+    if query.delimiter.is_some() {
+        input.delimiter = query.delimiter;
+    }
+    if query.encoding_type.is_some() {
+        input.encoding_type = query.encoding_type;
+    }
+    if query.fetch_owner.is_some() {
+        input.fetch_owner = query.fetch_owner;
+    }
+    if query.max_keys.is_some() {
+        input.max_keys = query.max_keys;
+    }
+    if query.prefix.is_some() {
+        input.prefix = query.prefix;
+    }
+    if query.start_after.is_some() {
+        input.start_after = query.start_after;
+    }
 
-    assign_opt!(from req to input headers [
-        &*X_AMZ_REQUEST_PAYER => request_payer,
-    ]);
+    req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
 
     Ok(input)
 }

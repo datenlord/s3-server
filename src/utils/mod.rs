@@ -22,22 +22,6 @@ pub use self::xml::XmlWriterExt;
 pub mod time;
 pub mod crypto;
 
-macro_rules! assign_opt{
-    (from $src:ident to $dst:ident fields [$($field: tt,)+])=>{$(
-        if $src.$field.is_some(){
-            $dst.$field = $src.$field;
-        }
-    )+};
-
-    (from $req:ident to $input:ident headers [$($name:expr => $field:ident,)+])=>{{
-        let _ = $req
-        $(
-            .assign_opt_header($name, &mut $input.$field)?
-        )+
-        ;
-    }};
-}
-
 /// deserialize xml body
 pub async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> Result<T, BoxStdError> {
     let bytes = hyper::body::to_bytes(body).await?;

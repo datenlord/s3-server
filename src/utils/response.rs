@@ -15,7 +15,7 @@ pub trait ResponseExt {
     fn new_with_status(body: impl Into<Body>, status: StatusCode) -> Self;
 
     /// set optional header
-    fn set_opt_header(
+    fn set_optional_header(
         &mut self,
         name: impl FnOnce() -> HeaderName,
         value: Option<String>,
@@ -40,7 +40,7 @@ impl ResponseExt for Response {
         res
     }
 
-    fn set_opt_header(
+    fn set_optional_header(
         &mut self,
         name: impl FnOnce() -> HeaderName,
         value: Option<String>,

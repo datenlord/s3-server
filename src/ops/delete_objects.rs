@@ -69,11 +69,12 @@ pub async fn extract(
         ..DeleteObjectsRequest::default()
     };
 
-    assign_opt!(from req to input headers [
-        &*X_AMZ_MFA => mfa,
-        &*X_AMZ_REQUEST_PAYER => request_payer,
-        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION => bypass_governance_retention,
-    ]);
+    req.assign_from_optional_header(&*X_AMZ_MFA, &mut input.mfa)?;
+    req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
+    req.assign_from_optional_header(
+        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION,
+        &mut input.bypass_governance_retention,
+    )?;
 
     Ok(input)
 }
@@ -81,7 +82,7 @@ pub async fn extract(
 impl S3Output for DeleteObjectsOutput {
     fn try_into_response(self) -> S3Result<Response> {
         wrap_output(|res| {
-            res.set_opt_header(|| X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
+            res.set_optional_header(|| X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
 
             let deleted = self.deleted;
             let errors = self.errors;
