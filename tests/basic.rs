@@ -13,7 +13,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
-fn setup_service() -> Result<(PathBuf, S3Service<FileSystem>)> {
+fn setup_service() -> Result<(PathBuf, S3Service)> {
     let root = common::setup_fs_root(true).unwrap();
     let fs = FileSystem::new(&root)
         .with_context(|| format!("Failed to create filesystem: root = {:?}", root))

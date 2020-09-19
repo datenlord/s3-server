@@ -51,6 +51,7 @@
 #[macro_use]
 pub(crate) mod utils;
 
+mod auth;
 mod error;
 mod error_code;
 mod ops;
@@ -59,6 +60,7 @@ mod service;
 mod signature_v4;
 mod storage;
 
+pub use self::auth::{S3Auth, SimpleAuth};
 pub use self::error::{S3Error, S3Result};
 pub use self::error_code::S3ErrorCode;
 pub use self::output::S3Output;

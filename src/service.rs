@@ -1,6 +1,7 @@
 //! Generic S3 service which wraps a S3 storage
 
 use crate::{
+    auth::S3Auth,
     error::{S3Error, S3Result},
     headers::names::X_AMZ_COPY_SOURCE,
     ops,
@@ -14,6 +15,7 @@ use crate::{
 };
 
 use std::{
+    fmt::{self, Debug},
     future::Future,
     ops::Deref,
     sync::Arc,
@@ -26,47 +28,36 @@ use log::{debug, error};
 use serde::de::DeserializeOwned;
 
 /// Generic S3 service which wraps a S3 storage
-#[derive(Debug)]
-pub struct S3Service<T> {
-    /// inner storage
-    storage: T,
+pub struct S3Service {
+    /// storage
+    storage: Box<dyn S3Storage + Send + Sync + 'static>,
+
+    /// auth
+    #[allow(dead_code)] // TODO: impl auth
+    auth: Option<Box<dyn S3Auth + Send + Sync + 'static>>,
 }
 
 /// Shared S3 service
 #[derive(Debug)]
-pub struct SharedS3Service<T> {
+pub struct SharedS3Service {
     /// inner service
-    inner: Arc<S3Service<T>>,
+    inner: Arc<S3Service>,
 }
 
-impl<T> S3Service<T> {
-    /// Constructs a S3 service
-    pub const fn new(storage: T) -> Self {
-        Self { storage }
-    }
-
-    /// convert `S3Service<T>` to `SharedS3Service<T>`
-    pub fn into_shared(self) -> SharedS3Service<T> {
-        SharedS3Service {
-            inner: Arc::new(self),
-        }
+impl Debug for S3Service {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "S3Service{{...}}")
     }
 }
 
-impl<T> AsRef<T> for S3Service<T> {
-    fn as_ref(&self) -> &T {
-        &self.storage
-    }
-}
-
-impl<T> Deref for SharedS3Service<T> {
-    type Target = S3Service<T>;
+impl Deref for SharedS3Service {
+    type Target = S3Service;
     fn deref(&self) -> &Self::Target {
         &*self.inner
     }
 }
 
-impl<T> Clone for SharedS3Service<T> {
+impl Clone for SharedS3Service {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -74,10 +65,7 @@ impl<T> Clone for SharedS3Service<T> {
     }
 }
 
-impl<T> hyper::service::Service<Request> for SharedS3Service<T>
-where
-    T: S3Storage + Send + Sync + 'static,
-{
+impl hyper::service::Service<Request> for SharedS3Service {
     type Response = Response;
 
     type Error = S3Error;
@@ -148,10 +136,34 @@ fn extract_header(req: &Request, name: impl AsHeaderName) -> S3Result<Option<&st
     }
 }
 
-impl<T> S3Service<T>
-where
-    T: S3Storage + Send + Sync + 'static,
-{
+impl S3Service {
+    /// Constructs a S3 service
+    pub fn new(storage: impl S3Storage + Send + Sync + 'static) -> Self {
+        Self {
+            storage: Box::new(storage),
+            auth: None,
+        }
+    }
+
+    /// Constructs a S3 service with an authentication provider
+    pub fn with_auth(
+        storage: impl S3Storage + Send + Sync + 'static,
+        auth: impl S3Auth + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            storage: Box::new(storage),
+            auth: Some(Box::new(auth)),
+        }
+    }
+
+    /// Converts `S3Service` to `SharedS3Service`
+    #[must_use]
+    pub fn into_shared(self) -> SharedS3Service {
+        SharedS3Service {
+            inner: Arc::new(self),
+        }
+    }
+
     /// Call the s3 service with `hyper::Request<hyper::Body>`
     /// # Errors
     /// Returns an `Err` if the service failed

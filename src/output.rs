@@ -27,10 +27,12 @@ where
         match self {
             Ok(output) => output.try_into_response(),
             Err(err) => match err {
+                // S3Error<E> -> S3Error<Never>
                 S3Error::Operation(e) => e.try_into_response(),
-                S3Error::InvalidRequest(e) => Err(<S3Error>::InvalidRequest(e)),
-                S3Error::InvalidOutput(e) => Err(<S3Error>::InvalidOutput(e)),
-                S3Error::Storage(e) => Err(<S3Error>::Storage(e)),
+                S3Error::InvalidRequest(e) => Err(S3Error::InvalidRequest(e)),
+                S3Error::InvalidOutput(e) => Err(S3Error::InvalidOutput(e)),
+                S3Error::Storage(e) => Err(S3Error::Storage(e)),
+                S3Error::Auth(e) => Err(S3Error::Auth(e)),
                 S3Error::NotSupported => Err(S3Error::NotSupported),
             },
         }

@@ -20,6 +20,8 @@ pub enum S3Error<E = Never> {
     InvalidOutput(BoxStdError),
     /// An error occurred when operating the storage
     Storage(BoxStdError),
+    /// An error occurred when authenticating a request
+    Auth(BoxStdError),
     /// An error occurred when the operation is not supported
     NotSupported,
 }
@@ -31,6 +33,7 @@ impl<E: Display> Display for S3Error<E> {
             Self::InvalidRequest(e) => write!(f, "Invalid request: {}", e),
             Self::InvalidOutput(e) => write!(f, "Invalid output: {}", e),
             Self::Storage(e) => write!(f, "Storage: {}", e),
+            Self::Auth(e) => write!(f, "Auth: {}", e),
             Self::NotSupported => write!(f, "Not supported"),
         }
     }
@@ -39,10 +42,11 @@ impl<E: Display> Display for S3Error<E> {
 impl<E: Error + 'static> Error for S3Error<E> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Operation(e) => Some(e),
-            Self::InvalidRequest(e) => Some(e.as_ref()),
-            Self::InvalidOutput(er) => Some(er.as_ref()),
-            Self::Storage(err) => Some(err.as_ref()),
+            Self::Operation(e1) => Some(e1),
+            Self::InvalidRequest(e2) => Some(e2.as_ref()),
+            Self::InvalidOutput(e3) => Some(e3.as_ref()),
+            Self::Storage(e4) => Some(e4.as_ref()),
+            Self::Auth(e5) => Some(e5.as_ref()),
             Self::NotSupported => None,
         }
     }
