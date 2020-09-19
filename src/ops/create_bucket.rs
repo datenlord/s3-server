@@ -9,7 +9,7 @@ use crate::{Body, BoxStdError, Request, Response};
 use crate::dto::{
     CreateBucketConfiguration, CreateBucketError, CreateBucketOutput, CreateBucketRequest,
 };
-use crate::header::names::{
+use crate::headers::names::{
     X_AMZ_ACL, X_AMZ_BUCKET_OBJECT_LOCK_ENABLED, X_AMZ_GRANT_FULL_CONTROL, X_AMZ_GRANT_READ,
     X_AMZ_GRANT_READ_ACP, X_AMZ_GRANT_WRITE, X_AMZ_GRANT_WRITE_ACP,
 };

@@ -65,7 +65,7 @@ pub use self::service::S3Service;
 pub use self::storage::S3Storage;
 
 pub mod dto;
-pub mod header;
+pub mod headers;
 pub mod path;
 pub mod query;
 

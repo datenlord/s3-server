@@ -114,14 +114,14 @@ impl S3Storage for FileSystem {
         &self,
         input: CopyObjectRequest,
     ) -> S3Result<CopyObjectOutput, CopyObjectError> {
-        use crate::header::CopySource;
+        use crate::headers::AmzCopySource;
 
-        let copy_source = CopySource::from_header_str(&input.copy_source)
+        let copy_source = AmzCopySource::from_header_str(&input.copy_source)
             .map_err(|e| S3Error::InvalidRequest(e.into()))?;
 
         match copy_source {
-            CopySource::AccessPoint { .. } => Err(S3Error::NotSupported),
-            CopySource::Bucket { bucket, key } => {
+            AmzCopySource::AccessPoint { .. } => Err(S3Error::NotSupported),
+            AmzCopySource::Bucket { bucket, key } => {
                 wrap_storage(async {
                     let src_path = self.get_object_path(bucket, key)?;
                     let dst_path = self.get_object_path(&input.bucket, &input.key)?;

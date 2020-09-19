@@ -7,7 +7,7 @@ use crate::utils::{RequestExt, ResponseExt, XmlWriterExt};
 use crate::{BoxStdError, Request, Response};
 
 use crate::dto::{CopyObjectError, CopyObjectOutput, CopyObjectRequest};
-use crate::header::names::{
+use crate::headers::names::{
     X_AMZ_ACL, X_AMZ_COPY_SOURCE_IF_MATCH, X_AMZ_COPY_SOURCE_IF_MODIFIED_SINCE,
     X_AMZ_COPY_SOURCE_IF_NONE_MATCH, X_AMZ_COPY_SOURCE_IF_UNMODIFIED_SINCE,
     X_AMZ_COPY_SOURCE_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
@@ -33,7 +33,7 @@ pub fn extract(
     key: &str,
     copy_source: &str,
 ) -> Result<CopyObjectRequest, BoxStdError> {
-    crate::header::CopySource::try_match(copy_source)?;
+    crate::headers::AmzCopySource::try_match(copy_source)?;
 
     let mut input: CopyObjectRequest = CopyObjectRequest {
         bucket: bucket.into(),

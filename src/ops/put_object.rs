@@ -9,7 +9,7 @@ use futures::stream::StreamExt;
 use std::io;
 
 use crate::dto::{ByteStream, PutObjectError, PutObjectOutput, PutObjectRequest};
-use crate::header::names::{
+use crate::headers::names::{
     CONTENT_MD5, X_AMZ_ACL, X_AMZ_EXPIRATION, X_AMZ_GRANT_FULL_CONTROL, X_AMZ_GRANT_READ,
     X_AMZ_GRANT_READ_ACP, X_AMZ_GRANT_WRITE_ACP, X_AMZ_OBJECT_LOCK_LEGAL_HOLD,
     X_AMZ_OBJECT_LOCK_MODE, X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE, X_AMZ_REQUEST_CHARGED,

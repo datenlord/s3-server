@@ -8,7 +8,7 @@ use crate::{Body, BoxStdError, Request, Response};
 use crate::dto::{
     Delete, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest, ObjectIdentifier,
 };
-use crate::header::names::{
+use crate::headers::names::{
     X_AMZ_BYPASS_GOVERNANCE_RETENTION, X_AMZ_MFA, X_AMZ_REQUEST_CHARGED, X_AMZ_REQUEST_PAYER,
 };
 

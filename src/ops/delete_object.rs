@@ -9,7 +9,7 @@ use hyper::StatusCode;
 use serde::Deserialize;
 
 use crate::dto::{DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest};
-use crate::header::names::{
+use crate::headers::names::{
     X_AMZ_BYPASS_GOVERNANCE_RETENTION, X_AMZ_DELETE_MARKER, X_AMZ_MFA, X_AMZ_REQUEST_CHARGED,
     X_AMZ_REQUEST_PAYER, X_AMZ_VERSION_ID,
 };

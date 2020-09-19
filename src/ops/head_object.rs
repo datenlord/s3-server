@@ -7,7 +7,7 @@ use crate::utils::{time, RequestExt, ResponseExt};
 use crate::{BoxStdError, Request, Response};
 
 use crate::dto::{HeadObjectError, HeadObjectOutput, HeadObjectRequest};
-use crate::header::names::{
+use crate::headers::names::{
     X_AMZ_DELETE_MARKER, X_AMZ_EXPIRATION, X_AMZ_MISSING_META, X_AMZ_MP_PARTS_COUNT,
     X_AMZ_OBJECT_LOCK_LEGAL_HOLD, X_AMZ_OBJECT_LOCK_MODE, X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,
     X_AMZ_REPLICATION_STATUS, X_AMZ_REQUEST_CHARGED, X_AMZ_REQUEST_PAYER, X_AMZ_RESTORE,

@@ -2,7 +2,7 @@
 
 use crate::{
     error::{S3Error, S3Result},
-    header::names::X_AMZ_COPY_SOURCE,
+    headers::names::X_AMZ_COPY_SOURCE,
     ops,
     output::S3Output,
     path::S3Path,
