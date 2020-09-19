@@ -38,9 +38,7 @@ pub fn extract(req: &Request, bucket: &str, key: &str) -> Result<DeleteObjectReq
     req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
 
     if let Some(query) = req.extract_query::<Query>()? {
-        if query.version_id.is_some() {
-            input.version_id = query.version_id;
-        }
+        input.version_id = query.version_id;
     }
 
     Ok(input)

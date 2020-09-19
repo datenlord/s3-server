@@ -18,30 +18,15 @@ pub fn extract(
 ) -> Result<ListObjectsV2Request, BoxStdError> {
     let mut input = ListObjectsV2Request {
         bucket: bucket.into(),
+        continuation_token: query.continuation_token,
+        delimiter: query.delimiter,
+        encoding_type: query.encoding_type,
+        fetch_owner: query.fetch_owner,
+        max_keys: query.max_keys,
+        prefix: query.prefix,
+        start_after: query.start_after,
         ..ListObjectsV2Request::default()
     };
-
-    if query.continuation_token.is_some() {
-        input.continuation_token = query.continuation_token;
-    }
-    if query.delimiter.is_some() {
-        input.delimiter = query.delimiter;
-    }
-    if query.encoding_type.is_some() {
-        input.encoding_type = query.encoding_type;
-    }
-    if query.fetch_owner.is_some() {
-        input.fetch_owner = query.fetch_owner;
-    }
-    if query.max_keys.is_some() {
-        input.max_keys = query.max_keys;
-    }
-    if query.prefix.is_some() {
-        input.prefix = query.prefix;
-    }
-    if query.start_after.is_some() {
-        input.start_after = query.start_after;
-    }
 
     req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
 

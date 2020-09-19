@@ -22,21 +22,11 @@ pub fn extract(
     };
 
     if let Some(query) = query {
-        if query.delimiter.is_some() {
-            input.delimiter = query.delimiter;
-        }
-        if query.encoding_type.is_some() {
-            input.encoding_type = query.encoding_type;
-        }
-        if query.marker.is_some() {
-            input.marker = query.marker;
-        }
-        if query.max_keys.is_some() {
-            input.max_keys = query.max_keys;
-        }
-        if query.prefix.is_some() {
-            input.prefix = query.prefix;
-        }
+        input.delimiter = query.delimiter;
+        input.encoding_type = query.encoding_type;
+        input.marker = query.marker;
+        input.max_keys = query.max_keys;
+        input.prefix = query.prefix;
     }
 
     req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
