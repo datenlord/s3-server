@@ -170,5 +170,8 @@ pub mod names {
 
         /// x-amz-date
         X_AMZ_DATE: "x-amz-date",
+
+        /// x-amz-content-sha256
+        X_AMZ_CONTENT_SHA256: "x-amz-content-sha256",
     ];
 }

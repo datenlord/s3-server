@@ -2,20 +2,22 @@
 //! s3-server 0.1.0-dev
 //!
 //! USAGE:
-//! s3 [OPTIONS]
+//!     s3 [OPTIONS]
 //!
 //! FLAGS:
-//! -h, --help       Prints help information
-//! -V, --version    Prints version information
+//!     -h, --help       Prints help information
+//!     -V, --version    Prints version information
 //!
 //! OPTIONS:
-//!     --fs-root <fs-root>     [default: .]
-//!     --host <host>           [default: localhost]
-//!     --port <port>           [default: 8014]
+//!         --fs-root <fs-root>           [default: .]
+//!         --host <host>                 [default: localhost]
+//!         --port <port>                 [default: 8014]
+//!         --access-key <access-key>    
+//!         --secret-key <secret-key>
 //! ```
 
-use s3_server::fs::TokioFileSystem as FileSystem;
 use s3_server::S3Service;
+use s3_server::{fs::TokioFileSystem as FileSystem, SimpleAuth};
 
 use anyhow::Result;
 use futures::future;
@@ -33,6 +35,12 @@ struct Args {
     host: String,
     #[structopt(long, default_value = "8014")]
     port: u16,
+
+    #[structopt(long, requires("secret-key"), display_order = 1000)]
+    access_key: Option<String>,
+
+    #[structopt(long, requires("access-key"), display_order = 1000)]
+    secret_key: Option<String>,
 }
 
 #[tokio::main]
@@ -44,7 +52,17 @@ async fn main() -> Result<()> {
     let fs = FileSystem::new(&args.fs_root)?;
     log::debug!("fs: {:?}", &fs);
 
-    let service = S3Service::new(fs).into_shared();
+    let service = match (args.access_key, args.secret_key) {
+        (None, None) => S3Service::new(fs),
+        (Some(access_key), Some(secret_key)) => {
+            let mut auth = SimpleAuth::new();
+            auth.register(access_key, secret_key);
+            log::debug!("auth: {:?}", &auth);
+            S3Service::with_auth(fs, auth)
+        }
+        _ => unreachable!(),
+    }
+    .into_shared();
 
     let server = {
         let listener = TcpListener::bind((args.host.as_str(), args.port))?;

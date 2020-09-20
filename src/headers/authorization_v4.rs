@@ -12,16 +12,16 @@ use smallvec::SmallVec;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthorizationV4<'a> {
     /// The algorithm that was used to calculate the signature.
-    algorithm: &'a str,
+    pub algorithm: &'a str,
 
     /// Access key ID and the scope information, which includes the date, Region, and service that were used to calculate the signature.
-    credential: CredentialV4<'a>,
+    pub credential: CredentialV4<'a>,
 
     /// A semicolon-separated list of request headers that you used to compute `Signature`.
-    signed_headers: Vec<&'a str>,
+    pub signed_headers: Vec<&'a str>,
 
     /// The 256-bit signature expressed as 64 lowercase hexadecimal characters.
-    signature: &'a str,
+    pub signature: &'a str,
 }
 
 /// Access key ID and the scope information, which includes the date, Region, and service that were used to calculate the signature.
@@ -33,29 +33,29 @@ pub struct AuthorizationV4<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CredentialV4<'a> {
     /// access key id
-    access_key_id: &'a str,
+    pub access_key_id: &'a str,
     /// <date> value is specified using YYYYMMDD format.
-    date: &'a str,
+    pub date: &'a str,
     /// region
-    aws_region: &'a str,
+    pub aws_region: &'a str,
     /// <aws-service> value is `s3` when sending request to Amazon S3.
-    aws_service: &'a str,
+    pub aws_service: &'a str,
 }
 
 /// `ParseAuthorizationError`
+#[allow(missing_copy_implementations)]
 #[derive(Debug, thiserror::Error)]
 #[error("ParseAuthorizationError")]
-pub(super) struct ParseAuthorizationError {
+pub struct ParseAuthorizationError {
     /// priv place holder
     _priv: (),
 }
 
-#[allow(dead_code)] // TODO: remove this
 impl<'a> AuthorizationV4<'a> {
     /// parse `AuthorizationV4` from `Authorization` header
-    pub(super) fn from_header_str(
-        auth: &'a str,
-    ) -> Result<AuthorizationV4<'a>, ParseAuthorizationError> {
+    /// # Errors
+    /// Returns an `Err` if the header is invalid
+    pub fn from_header_str(auth: &'a str) -> Result<AuthorizationV4<'a>, ParseAuthorizationError> {
         /// nom parser
         fn parse(mut input: &str) -> nom::IResult<&str, AuthorizationV4<'_>> {
             macro_rules! parse_and_bind {

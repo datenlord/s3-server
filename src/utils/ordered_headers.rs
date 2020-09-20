@@ -1,13 +1,12 @@
 //! Ordered headers
 
-#![allow(dead_code)] // TODO: remove this
-
 use crate::Request;
 
-use hyper::header::ToStrError;
+use hyper::header::{AsHeaderName, ToStrError};
 use smallvec::SmallVec;
 
 /// Immutable http header container
+#[derive(Debug)]
 pub struct OrderedHeaders<'a> {
     /// ascending headers (header names are lowercase)
     headers: SmallVec<[(&'a str, &'a str); 16]>,
@@ -37,6 +36,16 @@ impl<'a> OrderedHeaders<'a> {
         headers.sort();
 
         Ok(Self { headers })
+    }
+
+    /// Get header value by name. Time `O(logn)`
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn get(&self, name: impl AsHeaderName) -> Option<&str> {
+        let headers = self.headers.as_slice();
+        match headers.binary_search_by_key(&name.as_str(), |(n, _)| *n) {
+            Ok(idx) => headers.get(idx).map(|(_, v)| *v),
+            Err(_) => None,
+        }
     }
 }
 

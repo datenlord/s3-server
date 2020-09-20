@@ -3,8 +3,6 @@
 //! See <https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html>
 //!
 
-#![allow(dead_code)] // TODO: remove this
-
 use crate::headers::AmzDate;
 use crate::utils::{crypto, Also, Apply, OrderedHeaders};
 
@@ -64,12 +62,12 @@ const EMPTY_STRING_SHA256_HASH: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 /// create canonical request
-fn create_canonical_request(
+pub fn create_canonical_request(
     method: &Method,
     uri_path: &str,
     query_strings: &[(String, String)],
     headers: &OrderedHeaders<'_>,
-    payload: Option<&[u8]>,
+    payload: &[u8],
 ) -> String {
     String::with_capacity(256)
         .also(|ans| {
@@ -146,19 +144,16 @@ fn create_canonical_request(
         })
         .also(|ans| {
             // <HashedPayload>
-            match payload {
-                None => {
-                    ans.push_str(EMPTY_STRING_SHA256_HASH);
-                }
-                Some(bytes) => {
-                    ans.push_str(&crypto::hex_sha256(bytes));
-                }
+            if payload.is_empty() {
+                ans.push_str(EMPTY_STRING_SHA256_HASH);
+            } else {
+                ans.push_str(&crypto::hex_sha256(payload));
             }
         })
 }
 
 /// create string to sign
-fn create_string_to_sign(canonical_request: &str, amz_date: &AmzDate, region: &str) -> String {
+pub fn create_string_to_sign(canonical_request: &str, amz_date: &AmzDate, region: &str) -> String {
     String::with_capacity(256)
         .also(|ans| {
             // <Algorithm>\n
@@ -183,7 +178,7 @@ fn create_string_to_sign(canonical_request: &str, amz_date: &AmzDate, region: &s
 }
 
 /// calculate signature
-fn calculate_signature(
+pub fn calculate_signature(
     string_to_sign: &str,
     secret_key: &str,
     amz_date: &AmzDate,
@@ -237,7 +232,7 @@ mod tests {
 
         let method = Method::GET;
 
-        let canonical_request = create_canonical_request(&method, path, &[], &headers, None);
+        let canonical_request = create_canonical_request(&method, path, &[], &headers, &[]);
         assert_eq!(
             canonical_request,
             concat!(
@@ -297,7 +292,7 @@ mod tests {
         let payload = "Welcome to Amazon S3.";
 
         let canonical_request =
-            create_canonical_request(&method, path, &[], &headers, Some(payload.as_bytes()));
+            create_canonical_request(&method, path, &[], &headers, payload.as_bytes());
 
         assert_eq!(
             canonical_request,
@@ -358,7 +353,7 @@ mod tests {
         let method = Method::GET;
 
         let canonical_request =
-            create_canonical_request(&method, path, query_strings, &headers, None);
+            create_canonical_request(&method, path, query_strings, &headers, &[]);
         assert_eq!(
             canonical_request,
             concat!(
@@ -419,7 +414,7 @@ mod tests {
         let method = Method::GET;
 
         let canonical_request =
-            create_canonical_request(&method, path, query_strings, &headers, None);
+            create_canonical_request(&method, path, query_strings, &headers, &[]);
 
         assert_eq!(
             canonical_request,

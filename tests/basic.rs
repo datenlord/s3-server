@@ -5,9 +5,11 @@ mod common;
 use common::Request;
 
 use s3_server::fs::TokioFileSystem as FileSystem;
+use s3_server::headers::names::X_AMZ_CONTENT_SHA256;
 use s3_server::{path::S3Path, S3Service};
 
 use anyhow::{Context, Result};
+use hyper::header::HeaderValue;
 use hyper::{Body, Method, StatusCode};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -37,6 +39,7 @@ pub async fn helper_write_object(
 }
 
 mod success {
+
     use super::*;
     #[tokio::test]
     async fn get_object() {
@@ -55,6 +58,10 @@ mod success {
         *req.uri_mut() = format!("http://localhost/{}/{}", bucket, key)
             .parse()
             .unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -79,6 +86,10 @@ mod success {
         *req.uri_mut() = format!("http://localhost/{}/{}", bucket, key)
             .parse()
             .unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -111,6 +122,10 @@ mod success {
         *req.uri_mut() = format!("http://localhost/{}/{}", bucket, key)
             .parse()
             .unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -134,6 +149,10 @@ mod success {
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::PUT;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -157,6 +176,10 @@ mod success {
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::DELETE;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -180,6 +203,10 @@ mod success {
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::HEAD;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -203,6 +230,10 @@ mod success {
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::GET;
         *req.uri_mut() = "http://localhost/".parse().unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -236,6 +267,7 @@ mod success {
 }
 
 mod error {
+
     use super::*;
 
     #[tokio::test]
@@ -250,6 +282,10 @@ mod error {
         *req.uri_mut() = format!("http://localhost/{}/{}", bucket, key)
             .parse()
             .unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -278,6 +314,10 @@ mod error {
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::HEAD;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();
@@ -310,6 +350,10 @@ mod error {
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::PUT;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
+        req.headers_mut().insert(
+            X_AMZ_CONTENT_SHA256.clone(),
+            HeaderValue::from_static("UNSIGNED-PAYLOAD"),
+        );
 
         let mut res = service.hyper_call(req).await.unwrap();
         let body = common::recv_body_string(&mut res).await.unwrap();

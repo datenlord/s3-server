@@ -1,7 +1,5 @@
 //! x-amz-date
 
-#![allow(dead_code)]
-
 /// x-amz-date
 #[allow(missing_copy_implementations)]
 #[derive(Debug)]
@@ -30,9 +28,6 @@ pub struct ParseAmzDateError {
 }
 
 impl AmzDate {
-    /// x-amz-date time format
-    const X_AMZ_DATE_FORMAT: &'static str = "%Y%m%dT%H%M%SZ";
-
     /// Parses `AmzDate` from header
     /// # Errors
     /// Returns an error if the header is invalid

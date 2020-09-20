@@ -32,8 +32,8 @@ impl<'a> AmzContentSha256<'a> {
     /// Returns an `Err` if the header is invalid
     pub fn from_header_str(header: &'a str) -> Result<Self, ParseAmzContentSha256Error> {
         match header {
-            "UNSIGNED-PAYLOAD" => Self::MultipleChunks,
-            "STREAMING-AWS4-HMAC-SHA256-PAYLOAD" => Self::UnsignedPayload,
+            "UNSIGNED-PAYLOAD" => Self::UnsignedPayload,
+            "STREAMING-AWS4-HMAC-SHA256-PAYLOAD" => Self::MultipleChunks,
             payload_checksum => {
                 if !is_sha256_checksum(payload_checksum) {
                     return Err(ParseAmzContentSha256Error { _priv: () });

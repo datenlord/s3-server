@@ -1,7 +1,5 @@
 //! S3 Authentication
 
-#![allow(dead_code)]
-
 use crate::error::S3Result;
 
 use std::collections::HashMap;
