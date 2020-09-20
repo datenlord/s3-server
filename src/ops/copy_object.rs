@@ -1,9 +1,10 @@
 //! [`CopyObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html)
 
-use crate::error::S3Result;
+use crate::error::{S3Result, XmlErrorResponse};
 use crate::error_code::S3ErrorCode;
-use crate::output::{wrap_output, S3Output, XmlErrorResponse};
+use crate::output::{wrap_output, S3Output};
 use crate::utils::{RequestExt, ResponseExt, XmlWriterExt};
+
 use crate::{BoxStdError, Request, Response};
 
 use crate::dto::{CopyObjectError, CopyObjectOutput, CopyObjectRequest};

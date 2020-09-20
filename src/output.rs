@@ -2,9 +2,8 @@
 
 use crate::{
     error::{S3Error, S3Result},
-    error_code::S3ErrorCode,
     utils::{ResponseExt, XmlWriterExt},
-    BoxStdError, Response,
+    BoxStdError, Response, XmlErrorResponse,
 };
 
 use hyper::{Body, StatusCode};
@@ -33,6 +32,7 @@ where
                 S3Error::InvalidOutput(e) => Err(S3Error::InvalidOutput(e)),
                 S3Error::Storage(e) => Err(S3Error::Storage(e)),
                 S3Error::Auth(e) => Err(S3Error::Auth(e)),
+                S3Error::Other(e) => e.try_into_response(),
                 S3Error::NotSupported => Err(S3Error::NotSupported),
             },
         }
@@ -45,31 +45,6 @@ pub fn wrap_output(f: impl FnOnce(&mut Response) -> Result<(), BoxStdError>) -> 
     match f(&mut res) {
         Ok(()) => Ok(res),
         Err(e) => Err(<S3Error>::InvalidOutput(e)),
-    }
-}
-
-/// Type representing an error response
-#[derive(Debug)]
-pub struct XmlErrorResponse {
-    /// code
-    code: S3ErrorCode,
-    /// message
-    message: Option<String>,
-    /// resource
-    resource: Option<String>,
-    /// request_id
-    request_id: Option<String>,
-}
-
-impl XmlErrorResponse {
-    /// Constructs a `XmlErrorResponse`
-    pub(crate) const fn from_code_msg(code: S3ErrorCode, message: String) -> Self {
-        Self {
-            code,
-            message: Some(message),
-            resource: None,
-            request_id: None,
-        }
     }
 }
 

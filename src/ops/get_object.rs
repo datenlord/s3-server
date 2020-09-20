@@ -1,8 +1,8 @@
 //! [`GetObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html)
 
-use crate::error::S3Result;
+use crate::error::{S3Result, XmlErrorResponse};
 use crate::error_code::S3ErrorCode;
-use crate::output::{wrap_output, S3Output, XmlErrorResponse};
+use crate::output::{wrap_output, S3Output};
 use crate::utils::{time, RequestExt, ResponseExt};
 use crate::{Body, BoxStdError, Request, Response};
 

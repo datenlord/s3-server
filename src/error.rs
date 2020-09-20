@@ -1,6 +1,6 @@
 //! Generic s3 error type.
 
-use crate::BoxStdError;
+use crate::{BoxStdError, S3ErrorCode};
 
 use std::convert::Infallible as Never;
 use std::error::Error;
@@ -22,8 +22,35 @@ pub enum S3Error<E = Never> {
     Storage(BoxStdError),
     /// An error occurred when authenticating a request
     Auth(BoxStdError),
+    /// Other errors
+    Other(XmlErrorResponse),
     /// An error occurred when the operation is not supported
     NotSupported,
+}
+
+/// Type representing an error response
+#[derive(Debug)]
+pub struct XmlErrorResponse {
+    /// code
+    pub code: S3ErrorCode,
+    /// message
+    pub message: Option<String>,
+    /// resource
+    pub resource: Option<String>,
+    /// request_id
+    pub request_id: Option<String>,
+}
+
+impl XmlErrorResponse {
+    /// Constructs a `XmlErrorResponse`
+    pub(crate) const fn from_code_msg(code: S3ErrorCode, message: String) -> Self {
+        Self {
+            code,
+            message: Some(message),
+            resource: None,
+            request_id: None,
+        }
+    }
 }
 
 impl<E: Display> Display for S3Error<E> {
@@ -34,6 +61,7 @@ impl<E: Display> Display for S3Error<E> {
             Self::InvalidOutput(e) => write!(f, "Invalid output: {}", e),
             Self::Storage(e) => write!(f, "Storage: {}", e),
             Self::Auth(e) => write!(f, "Auth: {}", e),
+            Self::Other(e) => write!(f, "Other: {:?}", e),
             Self::NotSupported => write!(f, "Not supported"),
         }
     }
@@ -47,7 +75,7 @@ impl<E: Error + 'static> Error for S3Error<E> {
             Self::InvalidOutput(e3) => Some(e3.as_ref()),
             Self::Storage(e4) => Some(e4.as_ref()),
             Self::Auth(e5) => Some(e5.as_ref()),
-            Self::NotSupported => None,
+            Self::Other(_) | Self::NotSupported => None,
         }
     }
 }

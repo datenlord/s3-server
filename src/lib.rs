@@ -61,7 +61,7 @@ mod signature_v4;
 mod storage;
 
 pub use self::auth::{S3Auth, SimpleAuth};
-pub use self::error::{S3Error, S3Result};
+pub use self::error::{S3Error, S3Result, XmlErrorResponse};
 pub use self::error_code::S3ErrorCode;
 pub use self::output::S3Output;
 pub use self::service::S3Service;
