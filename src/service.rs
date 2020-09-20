@@ -35,6 +35,7 @@ use hyper::{
 };
 use log::{debug, error};
 use serde::de::DeserializeOwned;
+use signature_v4::Payload;
 
 /// Generic S3 service which wraps a S3 storage
 pub struct S3Service {
@@ -330,7 +331,11 @@ impl S3Service {
             let uri_path = ctx.req.uri().path();
             let query_strings = ctx.query_strings.as_deref().unwrap_or(&[]);
             let headers = &ctx.headers;
-            let payload = &*bytes;
+            let payload = if bytes.is_empty() {
+                Payload::Empty
+            } else {
+                Payload::SingleChunk(&*bytes)
+            };
 
             let canonical_request = signature_v4::create_canonical_request(
                 method,

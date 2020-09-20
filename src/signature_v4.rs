@@ -61,13 +61,24 @@ fn is_skipped_header(header: &str) -> bool {
 const EMPTY_STRING_SHA256_HASH: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
+/// Payload
+pub enum Payload<'a> {
+    /// empty
+    Empty,
+    /// single chunk
+    SingleChunk(&'a [u8]),
+    /// multiple chunks
+    #[allow(dead_code)] // TODO: remove this allow
+    MultipleChunks,
+}
+
 /// create canonical request
 pub fn create_canonical_request(
     method: &Method,
     uri_path: &str,
     query_strings: &[(String, String)],
     headers: &OrderedHeaders<'_>,
-    payload: &[u8],
+    payload: Payload<'_>,
 ) -> String {
     String::with_capacity(256)
         .also(|ans| {
@@ -144,11 +155,12 @@ pub fn create_canonical_request(
         })
         .also(|ans| {
             // <HashedPayload>
-            if payload.is_empty() {
-                ans.push_str(EMPTY_STRING_SHA256_HASH);
-            } else {
-                ans.push_str(&crypto::hex_sha256(payload));
+            match payload {
+                Payload::Empty => ans.push_str(EMPTY_STRING_SHA256_HASH),
+                Payload::SingleChunk(data) => ans.push_str(&crypto::hex_sha256(data)),
+                Payload::MultipleChunks => ans.push_str("STREAMING-AWS4-HMAC-SHA256-PAYLOAD"),
             }
+            drop(payload)
         })
 }
 
@@ -232,7 +244,9 @@ mod tests {
 
         let method = Method::GET;
 
-        let canonical_request = create_canonical_request(&method, path, &[], &headers, &[]);
+        let canonical_request =
+            create_canonical_request(&method, path, &[], &headers, Payload::Empty);
+
         assert_eq!(
             canonical_request,
             concat!(
@@ -291,8 +305,13 @@ mod tests {
         let method = Method::PUT;
         let payload = "Welcome to Amazon S3.";
 
-        let canonical_request =
-            create_canonical_request(&method, path, &[], &headers, payload.as_bytes());
+        let canonical_request = create_canonical_request(
+            &method,
+            path,
+            &[],
+            &headers,
+            Payload::SingleChunk(payload.as_bytes()),
+        );
 
         assert_eq!(
             canonical_request,
@@ -353,7 +372,7 @@ mod tests {
         let method = Method::GET;
 
         let canonical_request =
-            create_canonical_request(&method, path, query_strings, &headers, &[]);
+            create_canonical_request(&method, path, query_strings, &headers, Payload::Empty);
         assert_eq!(
             canonical_request,
             concat!(
@@ -414,7 +433,7 @@ mod tests {
         let method = Method::GET;
 
         let canonical_request =
-            create_canonical_request(&method, path, query_strings, &headers, &[]);
+            create_canonical_request(&method, path, query_strings, &headers, Payload::Empty);
 
         assert_eq!(
             canonical_request,

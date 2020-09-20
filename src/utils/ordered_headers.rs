@@ -39,13 +39,14 @@ impl<'a> OrderedHeaders<'a> {
     }
 
     /// Get header value by name. Time `O(logn)`
-    #[allow(clippy::needless_pass_by_value)]
     pub fn get(&self, name: impl AsHeaderName) -> Option<&str> {
         let headers = self.headers.as_slice();
-        match headers.binary_search_by_key(&name.as_str(), |(n, _)| *n) {
+        let ans = match headers.binary_search_by_key(&name.as_str(), |(n, _)| *n) {
             Ok(idx) => headers.get(idx).map(|(_, v)| *v),
             Err(_) => None,
-        }
+        };
+        drop(name);
+        ans
     }
 }
 
