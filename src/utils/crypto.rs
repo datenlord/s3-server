@@ -1,5 +1,6 @@
 //! crypto utils
 
+use bytes::Bytes;
 use hmac::{Hmac, Mac, NewMac};
 use sha2::{Digest, Sha256};
 
@@ -14,6 +15,19 @@ pub fn is_sha256_checksum(s: &str) -> bool {
 /// `hex(sha256(data))`
 pub fn hex_sha256(data: &[u8]) -> String {
     let src = Sha256::digest(data);
+
+    #[cfg(test)]
+    debug_assert!(src.as_slice().len() == 32);
+
+    #[allow(clippy::unreachable)] // a sha256 hash string's length is always 64
+    faster_hex::hex_string(src.as_ref()).unwrap_or_else(|_| unreachable!())
+}
+
+/// `hex(sha256(chunks))`
+pub fn hex_sha256_chunk(chunk_data: &[Bytes]) -> String {
+    let src = Sha256::new()
+        .also(|h| chunk_data.iter().for_each(|data| h.update(data)))
+        .finalize();
 
     #[cfg(test)]
     debug_assert!(src.as_slice().len() == 32);

@@ -38,10 +38,12 @@
     clippy::implicit_return, // actually omitting the return keyword is idiomatic Rust code
     clippy::missing_inline_in_public_items, // In general, it is not bad
     clippy::module_name_repetitions, // Allowed by default
+    clippy::unreachable, // impossible
 )]
 #![cfg_attr(test, allow(
     clippy::panic, // Panic when fatal failures occur
     clippy::unwrap_used, // Tests need `unwrap`
+    clippy::indexing_slicing, // Fail fast
 ))]
 #![allow(
     // FIXME: Deny lints below
@@ -52,6 +54,7 @@
 pub(crate) mod utils;
 
 mod auth;
+mod chunked_stream;
 mod error;
 mod error_code;
 mod ops;
