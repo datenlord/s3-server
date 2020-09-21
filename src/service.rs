@@ -2,6 +2,7 @@
 
 use crate::{
     auth::S3Auth,
+    chunked_stream::ChunkedStream,
     error::{S3Error, S3Result, XmlErrorResponse},
     headers::names::{X_AMZ_CONTENT_SHA256, X_AMZ_COPY_SOURCE, X_AMZ_DATE},
     headers::AmzContentSha256,
@@ -13,8 +14,9 @@ use crate::{
     path::S3PathErrorKind,
     query::GetQuery,
     query::PostQuery,
-    signature_v4,
+    signature_v4::{self, Payload},
     storage::S3Storage,
+    utils::Also,
     utils::OrderedHeaders,
     utils::{Apply, RequestExt},
     BoxStdError, Request, Response, S3ErrorCode,
@@ -23,19 +25,20 @@ use crate::{
 use std::{
     fmt::{self, Debug},
     future::Future,
+    io, mem,
     ops::Deref,
     sync::Arc,
     task::{Context, Poll},
 };
 
 use futures::future::BoxFuture;
+use futures::stream::StreamExt;
 use hyper::{
     header::{AsHeaderName, AUTHORIZATION},
     Body, Method,
 };
 use log::{debug, error};
 use serde::de::DeserializeOwned;
-use signature_v4::Payload;
 
 /// Generic S3 service which wraps a S3 storage
 pub struct S3Service {
@@ -152,6 +155,45 @@ struct ReqContext<'a> {
     path: S3Path<'a>,
 }
 
+/// extract `AmzContentSha256` from headers
+fn extract_amz_content_sha256<'a>(
+    headers: &'_ OrderedHeaders<'a>,
+) -> S3Result<AmzContentSha256<'a>> {
+    headers
+        .get(&*X_AMZ_CONTENT_SHA256)
+        .ok_or_else(|| {
+            code_error(
+                S3ErrorCode::InvalidRequest,
+                "Missing header: x-amz-content-sha256",
+            )
+        })?
+        .apply(AmzContentSha256::from_header_str)
+        .map_err(|_| {
+            code_error(
+                S3ErrorCode::InvalidRequest,
+                "Invalid header: x-amz-content-sha256",
+            )
+        })
+}
+
+/// extract `AuthorizationV4` from headers
+fn extract_authorization_v4<'a>(headers: &'_ OrderedHeaders<'a>) -> S3Result<AuthorizationV4<'a>> {
+    headers
+        .get(AUTHORIZATION)
+        .ok_or_else(|| code_error(S3ErrorCode::InvalidRequest, "Missing header: Authorization"))?
+        .apply(AuthorizationV4::from_header_str)
+        .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid header: Authorization"))
+}
+
+/// extract `AmzDate` from headers
+fn extract_amz_date(headers: &'_ OrderedHeaders<'_>) -> S3Result<AmzDate> {
+    headers
+        .get(&*X_AMZ_DATE)
+        .ok_or_else(|| code_error(S3ErrorCode::InvalidRequest, "Missing header: x-amz-date"))?
+        .apply(AmzDate::from_header_str)
+        .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid header: x-amz-date"))
+}
+
 /// Create a `S3Error::Other`
 fn code_error(code: S3ErrorCode, msg: &'static str) -> S3Error {
     S3Error::Other(XmlErrorResponse::from_code_msg(code, msg.to_owned()))
@@ -262,88 +304,69 @@ impl S3Service {
 
     /// check signature (v4)
     async fn check_signature(&self, ctx: &mut ReqContext<'_>) -> S3Result<()> {
-        let amz_content_sha256 = ctx
-            .headers
-            .get(&*X_AMZ_CONTENT_SHA256)
-            .ok_or_else(|| {
-                code_error(
-                    S3ErrorCode::InvalidRequest,
-                    "Missing header: x-amz-content-sha256",
-                )
-            })?
-            .apply(AmzContentSha256::from_header_str)
-            .map_err(|_| {
-                code_error(
-                    S3ErrorCode::InvalidRequest,
-                    "Invalid header: x-amz-content-sha256",
-                )
-            })?;
-        dbg!(&amz_content_sha256);
+        let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
 
-        match &amz_content_sha256 {
+        let is_stream = match &amz_content_sha256 {
             AmzContentSha256::UnsignedPayload => return Ok(()),
-            AmzContentSha256::SingleChunk { .. } => {
-                if self.auth.is_none() {
-                    return Err(S3Error::NotSupported);
-                }
-            }
-            AmzContentSha256::MultipleChunks => return Err(S3Error::NotSupported), // TODO: supported multiple chunks
-        }
+            AmzContentSha256::SingleChunk { .. } => false,
+            AmzContentSha256::MultipleChunks => true,
+        };
 
         let auth_provider = match self.auth {
             Some(ref a) => &**a,
-            None => return Ok(()),
+            None => return Err(S3Error::NotSupported),
         };
 
         // TODO: support query auth
-        let auth: AuthorizationV4<'_> = ctx
-            .headers
-            .get(AUTHORIZATION)
-            .ok_or_else(|| {
-                code_error(S3ErrorCode::InvalidRequest, "Missing header: Authorization")
-            })?
-            .apply(AuthorizationV4::from_header_str)
-            .map_err(|_| {
-                code_error(S3ErrorCode::InvalidRequest, "Invalid header: Authorization")
-            })?;
+        let auth: AuthorizationV4<'_> =
+            extract_authorization_v4(&ctx.headers)?.also(|auth| auth.signed_headers.sort());
 
         let secret_key = auth_provider
             .get_secret_access_key(auth.credential.access_key_id)
             .await?
             .ok_or_else(|| code_error(S3ErrorCode::NotSignedUp, "Your account is not signed up"))?;
 
-        let amz_date = ctx
-            .headers
-            .get(&*X_AMZ_DATE)
-            .ok_or_else(|| code_error(S3ErrorCode::InvalidRequest, "Missing header: x-amz-date"))?
-            .apply(AmzDate::from_header_str)
-            .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid header: x-amz-date"))?;
-
-        // TODO: payload enum
-
-        let bytes = std::mem::replace(&mut ctx.body, Body::empty())
-            .apply(hyper::body::to_bytes)
-            .await
-            .map_err(|e| S3Error::InvalidRequest(e.into()))?;
+        let amz_date = extract_amz_date(&ctx.headers)?;
 
         let signature = {
             let method = ctx.req.method();
             let uri_path = ctx.req.uri().path();
             let query_strings = ctx.query_strings.as_deref().unwrap_or(&[]);
-            let headers = &ctx.headers;
-            let payload = if bytes.is_empty() {
-                Payload::Empty
-            } else {
-                Payload::SingleChunk(&*bytes)
-            };
 
-            let canonical_request = signature_v4::create_canonical_request(
-                method,
-                uri_path,
-                query_strings,
-                headers,
-                payload,
-            );
+            // here requires that `auth.signed_headers` is sorted
+            let headers = ctx.headers.map_signed_headers(&auth.signed_headers);
+
+            let canonical_request = if is_stream {
+                signature_v4::create_canonical_request(
+                    method,
+                    uri_path,
+                    query_strings,
+                    &headers,
+                    Payload::MultipleChunks,
+                )
+            } else {
+                let bytes = std::mem::replace(&mut ctx.body, Body::empty())
+                    .apply(hyper::body::to_bytes)
+                    .await
+                    .map_err(|e| S3Error::InvalidRequest(e.into()))?;
+
+                let payload = if bytes.is_empty() {
+                    Payload::Empty
+                } else {
+                    Payload::SingleChunk(&bytes)
+                };
+                let ans = signature_v4::create_canonical_request(
+                    method,
+                    uri_path,
+                    query_strings,
+                    &headers,
+                    payload,
+                );
+
+                ctx.body = Body::from(bytes);
+
+                ans
+            };
 
             let region = auth.credential.aws_region;
             let string_to_sign =
@@ -359,7 +382,28 @@ impl S3Service {
             ));
         }
 
-        ctx.body = Body::from(bytes);
+        if is_stream {
+            let body = mem::replace(&mut ctx.body, Body::empty())
+                .map(|try_chunk| {
+                    try_chunk.map(|c| c).map_err(|e| {
+                        io::Error::new(
+                            io::ErrorKind::Other,
+                            format!("Error obtaining chunk: {}", e),
+                        )
+                    })
+                })
+                .apply(Box::new);
+
+            let chunked_stream = ChunkedStream::new(
+                body,
+                signature.into(),
+                amz_date,
+                auth.credential.aws_region.into(),
+                secret_key.into(),
+            );
+
+            ctx.body = Body::wrap_stream(chunked_stream);
+        }
 
         Ok(())
     }
