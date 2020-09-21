@@ -111,7 +111,7 @@ impl<'a> AuthorizationV4<'a> {
             parse_and_bind!(mut input => slash_tail => aws_region);
             parse_and_bind!(mut input => slash_tail => aws_service);
             parse_and_bind!(mut input => tag("aws4_request,") => _);
-            parse_and_bind!(mut input => multispace1 => _);
+            parse_and_bind!(mut input => multispace0 => _);
             parse_and_bind!(mut input => tag("SignedHeaders=") => _);
 
             let mut headers: SmallVec<[&str; 16]> = SmallVec::new();
@@ -124,7 +124,7 @@ impl<'a> AuthorizationV4<'a> {
                 }
             }
 
-            parse_and_bind!(mut input => multispace1 => _);
+            parse_and_bind!(mut input => multispace0 => _);
             parse_and_bind!(mut input => tag("Signature=") => _);
             parse_and_bind!(mut input => space_till0 => signature);
             parse_and_bind!(mut input => all_consuming(multispace0) => _);
@@ -185,5 +185,36 @@ mod tests {
 
             assert!(matches!(AuthorizationV4::from_header_str(auth), Err(_)));
         }
+    }
+
+    #[test]
+    fn regression() {
+        let auth = concat!(
+            "AWS4-HMAC-SHA256 ",
+            "Credential=AKIAIOSFODNN7EXAMPLE/20200921/us-east-1/s3/aws4_request,",
+            "SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length,",
+            "Signature=7a7f7778618cadc05f112b44cca218e001a0a020c5c512d8aa2bca2afb713fad",
+        );
+
+        let ans = AuthorizationV4::from_header_str(auth).unwrap();
+
+        assert_eq!(ans.algorithm, "AWS4-HMAC-SHA256");
+        assert_eq!(ans.credential.access_key_id, "AKIAIOSFODNN7EXAMPLE");
+        assert_eq!(ans.credential.date, "20200921");
+        assert_eq!(ans.credential.aws_region, "us-east-1");
+        assert_eq!(ans.credential.aws_service, "s3");
+        assert_eq!(
+            ans.signed_headers,
+            &[
+                "host",
+                "x-amz-content-sha256",
+                "x-amz-date",
+                "x-amz-decoded-content-length"
+            ]
+        );
+        assert_eq!(
+            ans.signature,
+            "7a7f7778618cadc05f112b44cca218e001a0a020c5c512d8aa2bca2afb713fad"
+        );
     }
 }
