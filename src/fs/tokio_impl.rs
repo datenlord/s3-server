@@ -1,16 +1,19 @@
 //! fs implementation based on `tokio`
 
-use crate::dto::{
-    Bucket, CopyObjectError, CopyObjectOutput, CopyObjectRequest, CopyObjectResult,
-    CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-    DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
-    DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
-    DeletedObject, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
-    GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
-    HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
-    ListBucketsOutput, ListBucketsRequest, ListObjectsError, ListObjectsOutput, ListObjectsRequest,
-    ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request, Object, PutObjectError,
-    PutObjectOutput, PutObjectRequest,
+use crate::{
+    dto::{
+        Bucket, CopyObjectError, CopyObjectOutput, CopyObjectRequest, CopyObjectResult,
+        CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
+        DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
+        DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
+        DeletedObject, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
+        GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
+        HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
+        ListBucketsOutput, ListBucketsRequest, ListObjectsError, ListObjectsOutput,
+        ListObjectsRequest, ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request, Object,
+        PutObjectError, PutObjectOutput, PutObjectRequest,
+    },
+    S3ErrorCode, XmlErrorResponse,
 };
 
 use crate::{
@@ -210,11 +213,17 @@ impl S3Storage for FileSystem {
         &self,
         input: GetBucketLocationRequest,
     ) -> S3Result<GetBucketLocationOutput, GetBucketLocationError> {
+        let path = wrap_storage(async { self.get_bucket_path(&input.bucket)?.apply(Ok).apply(Ok) })
+            .await?;
+
+        if !path.exists() {
+            return Err(<S3Error<GetBucketLocationError>>::Other(
+                XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, "NotFound".into()),
+            ));
+            // return Err(io::Error::new(io::ErrorKind::NotFound, "NotFound").into());
+        }
+
         wrap_storage(async move {
-            let path = self.get_bucket_path(&input.bucket)?;
-            if !path.exists() {
-                return Err(io::Error::new(io::ErrorKind::NotFound, "NotFound").into());
-            }
             let output = GetBucketLocationOutput {
                 location_constraint: None, // TODO: handle region
             };

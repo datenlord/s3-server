@@ -8,6 +8,7 @@ use crate::{headers::AmzDate, signature_v4, utils::Apply};
 
 use std::convert::TryInto;
 use std::io;
+use std::mem;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::vec;
@@ -30,6 +31,7 @@ pin_project! {
 }
 
 /// signature ctx
+#[derive(Debug)]
 struct SignatureCtx {
     /// date
     amz_date: AmzDate,
@@ -51,6 +53,9 @@ enum State {
     ReadingMeta {
         /// previous bytes
         prev_bytes: Option<Bytes>,
+
+        /// buf
+        buf: Vec<u8>,
     },
     /// ReadingData
     ReadingData {
@@ -60,6 +65,8 @@ enum State {
         expected_signature: Box<[u8]>,
         /// previous bytes
         prev_bytes: Option<Bytes>,
+        /// buf
+        buf: Vec<Bytes>,
     },
     /// ReleasingData
     ReleasingData {
@@ -117,7 +124,10 @@ where
     ) -> Self {
         Self {
             body,
-            state: State::ReadingMeta { prev_bytes: None },
+            state: State::ReadingMeta {
+                prev_bytes: None,
+                buf: Vec::new(),
+            },
             signature_ctx: SignatureCtx {
                 prev_signature: seed_signature,
                 amz_date,
@@ -186,9 +196,8 @@ fn poll_read_meta<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
     mut body: Pin<&mut S>,
     cx: &mut Context<'_>,
     prev_bytes: &mut Option<Bytes>,
+    buf: &mut Vec<u8>,
 ) -> Poll<Option<Result<State, ChunkedStreamError>>> {
-    let mut buf: Vec<u8> = Vec::new();
-
     let mut push_meta_bytes = |mut bytes: Bytes| {
         if let Some(idx) = memchr(b'\n', bytes.as_ref()) {
             let len = idx.wrapping_add(1); // NOTE: idx < bytes.len()
@@ -231,11 +240,12 @@ fn poll_read_meta<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
         }
     };
 
-    match parse_chunk_meta(&buf) {
+    match parse_chunk_meta(buf) {
         Ok((_, meta)) => State::ReadingData {
             remaining_data_size: meta.size,
             expected_signature: meta.signature.into(),
             prev_bytes,
+            buf: Vec::new(),
         },
         Err(_) => State::Error {
             kind: ErrorKind::EncodingError,
@@ -252,9 +262,8 @@ fn poll_read_data<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
     remaining_data_size: &mut usize,
     expected_signature: &[u8],
     prev_bytes: &mut Option<Bytes>,
+    bytes_buffer: &mut Vec<Bytes>,
 ) -> Poll<Option<Result<State, ChunkedStreamError>>> {
-    let mut bytes_buffer = Vec::new();
-
     let mut push_bytes = |mut bytes: Bytes| {
         if *remaining_data_size == 0 {
             return Some(bytes);
@@ -270,7 +279,6 @@ fn poll_read_data<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
             None
         }
     };
-
     let mut remaining_bytes = 'outer: loop {
         if let Some(bytes) = prev_bytes.take() {
             let opt = push_bytes(bytes);
@@ -290,6 +298,7 @@ fn poll_read_data<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
                     return Poll::Ready(Some(Err(ChunkedStreamError::Io(e))));
                 }
                 Some(Ok(bytes)) => {
+                    dbg!(&bytes);
                     let opt = push_bytes(bytes);
                     if opt.is_some() {
                         break 'outer opt;
@@ -298,7 +307,6 @@ fn poll_read_data<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
             }
         }
     };
-
     for expected_byte in b"\r\n" {
         loop {
             match remaining_bytes {
@@ -337,13 +345,13 @@ fn poll_read_data<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
     let remaining_bytes =
         remaining_bytes.and_then(|bytes| if bytes.is_empty() { None } else { Some(bytes) });
 
-    if check_signature(signature_ctx, expected_signature, &bytes_buffer) {
+    if check_signature(signature_ctx, expected_signature, bytes_buffer) {
         signature_ctx.prev_signature = std::str::from_utf8(expected_signature)
             .unwrap_or_else(|_| unreachable!())
             .into();
 
         State::ReleasingData {
-            data_iter: bytes_buffer.into_iter(),
+            data_iter: mem::take(bytes_buffer).into_iter(),
             remaining_bytes,
         }
     } else {
@@ -368,8 +376,8 @@ where
 
         'state_machine: loop {
             match state {
-                State::ReadingMeta { prev_bytes } => {
-                    match futures::ready!(poll_read_meta(body.as_mut(), cx, prev_bytes)?) {
+                State::ReadingMeta { prev_bytes, buf } => {
+                    match futures::ready!(poll_read_meta(body.as_mut(), cx, prev_bytes, buf)?) {
                         None => return Poll::Ready(None),
                         Some(s) => *state = s,
                     }
@@ -379,6 +387,7 @@ where
                     remaining_data_size,
                     expected_signature,
                     prev_bytes,
+                    buf,
                 } => {
                     match futures::ready!(poll_read_data(
                         body.as_mut(),
@@ -387,6 +396,7 @@ where
                         remaining_data_size,
                         expected_signature,
                         prev_bytes,
+                        buf,
                     )?) {
                         None => return Poll::Ready(None),
                         Some(s) => *state = s,
@@ -402,6 +412,7 @@ where
                     } else {
                         *state = State::ReadingMeta {
                             prev_bytes: remaining_bytes.take(),
+                            buf: Vec::new(),
                         };
                         continue 'state_machine;
                     }

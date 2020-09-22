@@ -106,16 +106,19 @@ fn wrap_handle_sync<T>(f: impl FnOnce() -> Result<T, BoxStdError>) -> S3Result<T
 
 macro_rules! call_s3_operation{
     ($op:ident with () by $storage:expr)  => {{
+        debug!("call_s3_operation: {}", stringify!($op));
         let input = wrap_handle_sync(ops::$op::extract)?;
         $storage.$op(input).await.try_into_response()
     }};
 
     ($op:ident with ($($arg:expr),+) by $storage:expr)  => {{
+        debug!("call_s3_operation: {}", stringify!($op));
         let input = wrap_handle_sync(||ops::$op::extract($($arg),+))?;
         $storage.$op(input).await.try_into_response()
     }};
 
     ($op:ident with async ($($arg:expr),*) by $storage:expr)  => {{
+        debug!("call_s3_operation: {}", stringify!($op));
         let input = wrap_handle(ops::$op::extract($($arg),*)).await?;
         $storage.$op(input).await.try_into_response()
     }};
@@ -384,7 +387,7 @@ impl S3Service {
 
         if is_stream {
             let body = mem::replace(&mut ctx.body, Body::empty()).map(|try_chunk| {
-                try_chunk.map(|c| c).map_err(|e| {
+                try_chunk.map_err(|e| {
                     io::Error::new(
                         io::ErrorKind::Other,
                         format!("Error obtaining chunk: {}", e),
