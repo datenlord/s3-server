@@ -383,16 +383,14 @@ impl S3Service {
         }
 
         if is_stream {
-            let body = mem::replace(&mut ctx.body, Body::empty())
-                .map(|try_chunk| {
-                    try_chunk.map(|c| c).map_err(|e| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("Error obtaining chunk: {}", e),
-                        )
-                    })
+            let body = mem::replace(&mut ctx.body, Body::empty()).map(|try_chunk| {
+                try_chunk.map(|c| c).map_err(|e| {
+                    io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("Error obtaining chunk: {}", e),
+                    )
                 })
-                .apply(Box::new);
+            });
 
             let chunked_stream = ChunkedStream::new(
                 body,

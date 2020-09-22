@@ -2,30 +2,31 @@
 
 // FIXME: verify the correctness of the state machine
 
-#![allow(dead_code)]
+#![allow(clippy::redundant_pub_crate)]
 
 use crate::{headers::AmzDate, signature_v4, utils::Apply};
 
-use std::collections::VecDeque;
 use std::convert::TryInto;
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use std::vec;
 
 use bytes::Bytes;
 use futures::stream::Stream;
 use memchr::memchr;
+use pin_project_lite::pin_project;
 
-/// aws-chunked
-pub struct ChunkedStream {
-    /// body
-    body: Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send + 'static>>,
+pin_project! {
+    /// aws-chunked
+    pub struct ChunkedStream<S> {
+        #[pin]
+        body: S,
 
-    /// signature infomation
-    signature_ctx: SignatureCtx,
+        signature_ctx: SignatureCtx,
 
-    /// state
-    state: State,
+        state: State,
+    }
 }
 
 /// signature ctx
@@ -63,7 +64,7 @@ enum State {
     /// ReleasingData
     ReleasingData {
         /// verified data
-        data_queue: VecDeque<Bytes>,
+        data_iter: vec::IntoIter<Bytes>,
         /// remaining bytes
         remaining_bytes: Option<Bytes>,
     },
@@ -102,17 +103,20 @@ enum ErrorKind {
     Incomplete,
 }
 
-impl ChunkedStream {
+impl<S> ChunkedStream<S>
+where
+    S: Stream<Item = io::Result<Bytes>> + Send + 'static,
+{
     /// Constructs a new `AwsChunkedStream`
     pub fn new(
-        body: Box<dyn Stream<Item = io::Result<Bytes>> + Send + 'static>,
+        body: S,
         seed_signature: Box<str>,
         amz_date: AmzDate,
         region: Box<str>,
         secret_key: Box<str>,
     ) -> Self {
         Self {
-            body: body.into(),
+            body,
             state: State::ReadingMeta { prev_bytes: None },
             signature_ctx: SignatureCtx {
                 prev_signature: seed_signature,
@@ -178,8 +182,8 @@ fn check_signature(ctx: &SignatureCtx, expected_signature: &[u8], chunk_data: &[
 }
 
 /// state machine: poll read meta
-fn poll_read_meta(
-    body: &mut Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send + 'static>>,
+fn poll_read_meta<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
+    mut body: Pin<&mut S>,
     cx: &mut Context<'_>,
     prev_bytes: &mut Option<Bytes>,
 ) -> Poll<Option<Result<State, ChunkedStreamError>>> {
@@ -241,8 +245,8 @@ fn poll_read_meta(
 }
 
 /// state machine: poll read data
-fn poll_read_data(
-    body: &mut Pin<Box<dyn Stream<Item = io::Result<Bytes>> + Send + 'static>>,
+fn poll_read_data<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
+    mut body: Pin<&mut S>,
     cx: &mut Context<'_>,
     signature_ctx: &mut SignatureCtx,
     remaining_data_size: &mut usize,
@@ -339,7 +343,7 @@ fn poll_read_data(
             .into();
 
         State::ReleasingData {
-            data_queue: bytes_buffer.into(),
+            data_iter: bytes_buffer.into_iter(),
             remaining_bytes,
         }
     } else {
@@ -350,20 +354,22 @@ fn poll_read_data(
     .apply(|s| Poll::Ready(Some(Ok(s))))
 }
 
-impl Stream for ChunkedStream {
+impl<S> Stream for ChunkedStream<S>
+where
+    S: Stream<Item = io::Result<Bytes>> + Send + 'static,
+{
     type Item = Result<Bytes, ChunkedStreamError>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let Self {
-            body,
-            signature_ctx,
-            state,
-        } = self.get_mut();
+        let this = self.project();
+        let mut body: Pin<&mut S> = this.body;
+        let state: &mut State = this.state;
+        let signature_ctx: &mut SignatureCtx = this.signature_ctx;
 
         'state_machine: loop {
             match state {
                 State::ReadingMeta { prev_bytes } => {
-                    match futures::ready!(poll_read_meta(body, cx, prev_bytes)?) {
+                    match futures::ready!(poll_read_meta(body.as_mut(), cx, prev_bytes)?) {
                         None => return Poll::Ready(None),
                         Some(s) => *state = s,
                     }
@@ -375,7 +381,7 @@ impl Stream for ChunkedStream {
                     prev_bytes,
                 } => {
                     match futures::ready!(poll_read_data(
-                        body,
+                        body.as_mut(),
                         cx,
                         signature_ctx,
                         remaining_data_size,
@@ -388,10 +394,10 @@ impl Stream for ChunkedStream {
                     continue 'state_machine;
                 }
                 State::ReleasingData {
-                    data_queue,
+                    data_iter,
                     remaining_bytes,
                 } => {
-                    if let Some(bytes) = data_queue.pop_front() {
+                    if let Some(bytes) = data_iter.next() {
                         return Poll::Ready(Some(Ok(bytes)));
                     } else {
                         *state = State::ReadingMeta {
@@ -460,7 +466,7 @@ mod tests {
 
         let stream = futures::stream::iter(chunks.into_iter());
         let mut chunked_stream = ChunkedStream::new(
-            Box::new(stream),
+            stream,
             seed_signature.into(),
             date,
             region.into(),
