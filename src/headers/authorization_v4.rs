@@ -42,6 +42,73 @@ pub struct CredentialV4<'a> {
     pub aws_service: &'a str,
 }
 
+macro_rules! parse_and_bind {
+    (mut $input:expr => $f:expr => $id:pat ) => {
+        let $id = $f($input)?.apply(|(__input, output)| {
+            $input = __input;
+            output
+        });
+    };
+    ($input:expr => $f:expr => $id:pat ) => {
+        let $id = $f($input)?.apply(|(_, output)| output);
+    };
+}
+
+impl<'a> CredentialV4<'a> {
+    /// parse by nom
+    pub(crate) fn parse_by_nom(mut input: &'a str) -> nom::IResult<&'a str, Self> {
+        use nom::{
+            bytes::complete::{tag, take_till1},
+            sequence::terminated,
+        };
+
+        let slash_tail = terminated(take_till1(|c| c == '/'), tag("/"));
+
+        parse_and_bind!(mut input => slash_tail => access_key_id);
+        parse_and_bind!(mut input => slash_tail => date);
+        parse_and_bind!(date => Self::verify_date => _);
+        parse_and_bind!(mut input => slash_tail => aws_region);
+        parse_and_bind!(mut input => slash_tail => aws_service);
+        parse_and_bind!(mut input => tag("aws4_request") => _);
+
+        CredentialV4 {
+            access_key_id,
+            date,
+            aws_region,
+            aws_service,
+        }
+        .apply(|c| Ok((input, c)))
+    }
+
+    /// verify date: YYYYMMDD
+    fn verify_date(input: &str) -> nom::IResult<&str, (&str, &str, &str)> {
+        use chrono::{TimeZone, Utc};
+        use nom::{
+            bytes::complete::take,
+            combinator::{all_consuming, verify},
+            sequence::tuple,
+        };
+
+        verify(
+            all_consuming(tuple((take(4_usize), take(2_usize), take(2_usize)))),
+            |&(y, m, d): &(&str, &str, &str)| {
+                macro_rules! parse_num {
+                    ($x:expr) => {{
+                        match $x.parse() {
+                            Ok(x) => x,
+                            Err(_) => return false,
+                        }
+                    }};
+                }
+                matches!(
+                    Utc.ymd_opt(parse_num!(y), parse_num!(m), parse_num!(d)),
+                    chrono::LocalResult::Single(_)
+                )
+            },
+        )(input)
+    }
+}
+
 /// `ParseAuthorizationError`
 #[allow(missing_copy_implementations)]
 #[derive(Debug, thiserror::Error)]
@@ -55,62 +122,24 @@ impl<'a> AuthorizationV4<'a> {
     /// parse `AuthorizationV4` from `Authorization` header
     /// # Errors
     /// Returns an `Err` if the header is invalid
-    pub fn from_header_str(auth: &'a str) -> Result<AuthorizationV4<'a>, ParseAuthorizationError> {
+    pub fn from_header_str(auth: &'a str) -> Result<Self, ParseAuthorizationError> {
         /// nom parser
         fn parse(mut input: &str) -> nom::IResult<&str, AuthorizationV4<'_>> {
-            macro_rules! parse_and_bind {
-                (mut $input:expr => $f:expr => $id:pat ) => {
-                    let $id = $f($input)?.apply(|(__input, output)| {
-                        $input = __input;
-                        output
-                    });
-                };
-                ($input:expr => $f:expr => $id:pat ) => {
-                    let $id = $f($input)?.apply(|(_, output)| output);
-                };
-            }
-
-            use chrono::{TimeZone, Utc};
             use nom::{
                 bytes::complete::{tag, take, take_till, take_till1},
                 character::complete::{multispace0, multispace1},
-                combinator::{all_consuming, verify},
-                sequence::{terminated, tuple},
+                combinator::all_consuming,
+                sequence::tuple,
             };
 
-            let slash_tail = terminated(take_till1(|c| c == '/'), tag("/"));
             let space_till1 = take_till1(|c: char| c.is_ascii_whitespace());
             let space_till0 = take_till(|c: char| c.is_ascii_whitespace());
 
             parse_and_bind!(mut input => space_till1 => algorithm);
             parse_and_bind!(mut input => multispace1 => _);
             parse_and_bind!(mut input => tag("Credential=") => _);
-            parse_and_bind!(mut input => slash_tail => access_key_id);
-            parse_and_bind!(mut input => slash_tail => date);
-
-            let verify_date = verify(
-                all_consuming(tuple((take(4_usize), take(2_usize), take(2_usize)))),
-                |&(y, m, d): &(&str, &str, &str)| {
-                    macro_rules! parse_num {
-                        ($x:expr) => {{
-                            match $x.parse() {
-                                Ok(x) => x,
-                                Err(_) => return false,
-                            }
-                        }};
-                    }
-                    matches!(
-                        Utc.ymd_opt(parse_num!(y), parse_num!(m), parse_num!(d)),
-                        chrono::LocalResult::Single(_)
-                    )
-                },
-            );
-
-            parse_and_bind!(date => verify_date => _);
-
-            parse_and_bind!(mut input => slash_tail => aws_region);
-            parse_and_bind!(mut input => slash_tail => aws_service);
-            parse_and_bind!(mut input => tag("aws4_request,") => _);
+            parse_and_bind!(mut input => CredentialV4::parse_by_nom => credential);
+            parse_and_bind!(mut input => tag(",") => _);
             parse_and_bind!(mut input => multispace0 => _);
             parse_and_bind!(mut input => tag("SignedHeaders=") => _);
 
@@ -131,12 +160,7 @@ impl<'a> AuthorizationV4<'a> {
 
             let ans = AuthorizationV4 {
                 algorithm,
-                credential: CredentialV4 {
-                    access_key_id,
-                    date,
-                    aws_region,
-                    aws_service,
-                },
+                credential,
                 signed_headers: headers.into_vec(),
                 signature,
             };

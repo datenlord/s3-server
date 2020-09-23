@@ -4,25 +4,27 @@ mod also;
 mod apply;
 mod byte_stream;
 mod ordered_headers;
+mod ordered_qs;
 mod request;
 mod response;
 mod xml;
-
-use hyper::Body;
-use serde::de::DeserializeOwned;
-
-use crate::BoxStdError;
 
 pub use self::also::Also;
 pub use self::apply::Apply;
 pub use self::byte_stream::ByteStream;
 pub use self::ordered_headers::OrderedHeaders;
+pub use self::ordered_qs::OrderedQs;
 pub use self::request::RequestExt;
 pub use self::response::ResponseExt;
 pub use self::xml::XmlWriterExt;
 
 pub mod crypto;
 pub mod time;
+
+use hyper::Body;
+use serde::de::DeserializeOwned;
+
+use crate::BoxStdError;
 
 /// deserialize xml body
 pub async fn deserialize_xml_body<T: DeserializeOwned>(body: Body) -> Result<T, BoxStdError> {

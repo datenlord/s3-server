@@ -8,7 +8,7 @@ mod authorization_v4;
 pub use self::amz_content_sha256::AmzContentSha256;
 pub use self::amz_copy_source::AmzCopySource;
 pub use self::amz_date::AmzDate;
-pub use self::authorization_v4::AuthorizationV4;
+pub use self::authorization_v4::{AuthorizationV4, CredentialV4};
 
 pub mod names {
     //! Amz header names

@@ -18,7 +18,7 @@ use crate::{
     storage::S3Storage,
     utils::Also,
     utils::OrderedHeaders,
-    utils::{Apply, RequestExt},
+    utils::{Apply, OrderedQs, RequestExt},
     BoxStdError, Request, Response, S3ErrorCode,
 };
 
@@ -151,7 +151,7 @@ struct ReqContext<'a> {
     /// ordered headers
     headers: OrderedHeaders<'a>,
     /// query strings
-    query_strings: Option<Vec<(String, String)>>,
+    query_strings: Option<OrderedQs>,
     /// body
     body: Body,
     /// s3 path
@@ -277,10 +277,10 @@ impl S3Service {
         let headers = OrderedHeaders::from_req(&req)
             .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid headers"))?;
 
-        let query_strings: Option<Vec<(String, String)>> = req
+        let query_strings: Option<OrderedQs> = req
             .uri()
             .query()
-            .map(|s| serde_urlencoded::from_str(s))
+            .map(OrderedQs::from_query)
             .transpose()
             .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid query strings"))?;
 
@@ -305,8 +305,60 @@ impl S3Service {
         Ok(resp)
     }
 
+    /// check presigned url (v4)
+    async fn check_presigned_url(&self, ctx: &mut ReqContext<'_>) -> S3Result<()> {
+        let qs = ctx.query_strings.as_ref().unwrap_or_else(|| unreachable!());
+
+        let presigned_url = signature_v4::PresignedUrl::from_query(qs)
+            .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Missing presigned fields"))?;
+
+        let auth_provider = match self.auth {
+            Some(ref a) => &**a,
+            None => return Err(S3Error::NotSupported),
+        };
+
+        let secret_key = auth_provider
+            .get_secret_access_key(presigned_url.credential.access_key_id)
+            .await?
+            .ok_or_else(|| code_error(S3ErrorCode::NotSignedUp, "Your account is not signed up"))?;
+
+        let signature = {
+            let canonical_request = signature_v4::create_presigned_canonical_request(
+                ctx.req.method(),
+                ctx.req.uri().path(),
+                qs.as_ref(),
+                &ctx.headers,
+            );
+
+            let region = presigned_url.credential.aws_region;
+            let amz_date = &presigned_url.amz_date;
+            let string_to_sign =
+                signature_v4::create_string_to_sign(&canonical_request, amz_date, region);
+
+            signature_v4::calculate_signature(&string_to_sign, &secret_key, amz_date, region)
+        };
+
+        if signature != presigned_url.signature {
+            return Err(code_error(
+                S3ErrorCode::SignatureDoesNotMatch,
+                "The request signature we calculated does not match the signature you provided.",
+            ));
+        }
+
+        Ok(())
+    }
+
     /// check signature (v4)
     async fn check_signature(&self, ctx: &mut ReqContext<'_>) -> S3Result<()> {
+        // --- query auth ---
+        if let Some(qs) = ctx.query_strings.as_ref() {
+            if qs.get("X-Amz-Signature").is_some() {
+                return self.check_presigned_url(ctx).await;
+            }
+        }
+
+        // --- header auth ---
+
         let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
 
         let is_stream = match &amz_content_sha256 {
@@ -320,7 +372,6 @@ impl S3Service {
             None => return Err(S3Error::NotSupported),
         };
 
-        // TODO: support query auth
         let auth: AuthorizationV4<'_> =
             extract_authorization_v4(&ctx.headers)?.also(|auth| auth.signed_headers.sort());
 
@@ -334,7 +385,8 @@ impl S3Service {
         let signature = {
             let method = ctx.req.method();
             let uri_path = ctx.req.uri().path();
-            let query_strings = ctx.query_strings.as_deref().unwrap_or(&[]);
+            let query_strings: &[(String, String)] =
+                ctx.query_strings.as_ref().map_or(&[], AsRef::as_ref);
 
             // here requires that `auth.signed_headers` is sorted
             let headers = ctx.headers.map_signed_headers(&auth.signed_headers);

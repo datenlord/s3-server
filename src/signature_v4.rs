@@ -2,6 +2,16 @@
 //!
 //! See <https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html>
 //!
+//! See <https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html>
+//!
+
+// TODO: support POST auth
+
+#![allow(dead_code)]
+
+mod presigned;
+
+pub use self::presigned::PresignedUrl;
 
 use crate::headers::AmzDate;
 use crate::utils::{crypto, Also, Apply, OrderedHeaders};
@@ -57,6 +67,11 @@ fn is_skipped_header(header: &str) -> bool {
     ["authorization", "user-agent"].contains(&header)
 }
 
+/// is skipped query string
+fn is_skipped_query_string(name: &str) -> bool {
+    name == "X-Amz-Signature"
+}
+
 /// sha256 hash of an empty string
 const EMPTY_STRING_SHA256_HASH: &str =
     "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
@@ -76,7 +91,7 @@ pub enum Payload<'a> {
 pub fn create_canonical_request(
     method: &Method,
     uri_path: &str,
-    query_strings: &[(String, String)],
+    query_strings: &[(impl AsRef<str>, impl AsRef<str>)],
     headers: &OrderedHeaders<'_>,
     payload: Payload<'_>,
 ) -> String {
@@ -96,8 +111,10 @@ pub fn create_canonical_request(
             let encoded_query_strings: SmallVec<[(String, String); 16]> = query_strings
                 .iter()
                 .map(|(n, v)| {
-                    let name = String::with_capacity(n.len()).also(|s| uri_encode(s, n, true));
-                    let value = String::with_capacity(v.len()).also(|s| uri_encode(s, v, true));
+                    let name = String::with_capacity(n.as_ref().len())
+                        .also(|s| uri_encode(s, n.as_ref(), true));
+                    let value = String::with_capacity(v.as_ref().len())
+                        .also(|s| uri_encode(s, v.as_ref(), true));
                     (name, value)
                 })
                 .collect::<SmallVec<[(String, String); 16]>>()
@@ -257,9 +274,101 @@ pub fn calculate_signature(
     crypto::hex_hmac_sha256(signing_key.as_ref(), string_to_sign.as_ref())
 }
 
+/// create presigned canonical request
+pub fn create_presigned_canonical_request(
+    method: &Method,
+    uri_path: &str,
+    query_strings: &[(impl AsRef<str>, impl AsRef<str>)],
+    headers: &OrderedHeaders<'_>,
+) -> String {
+    String::with_capacity(256)
+        .also(|ans| {
+            // <HTTPMethod>\n
+            ans.push_str(method.as_str());
+            ans.push('\n');
+        })
+        .also(|ans| {
+            // <CanonicalURI>\n
+            uri_encode(ans, uri_path, false);
+            ans.push('\n');
+        })
+        .also(|ans| {
+            // <CanonicalQueryString>\n
+            let encoded_query_strings: SmallVec<[(String, String); 16]> = query_strings
+                .iter()
+                .filter_map(|(n, v)| {
+                    if is_skipped_query_string(n.as_ref()) {
+                        return None;
+                    }
+                    let name = String::with_capacity(n.as_ref().len())
+                        .also(|s| uri_encode(s, n.as_ref(), true));
+                    let value = String::with_capacity(v.as_ref().len())
+                        .also(|s| uri_encode(s, v.as_ref(), true));
+                    (name, value).apply(Some)
+                })
+                .collect::<SmallVec<[(String, String); 16]>>()
+                .also(|qs| qs.sort());
+
+            if let Some((first, remain)) = encoded_query_strings.split_first() {
+                {
+                    let (name, value) = first;
+                    ans.push_str(name);
+                    ans.push('=');
+                    ans.push_str(value);
+                }
+                for (name, value) in remain {
+                    ans.push('&');
+                    ans.push_str(name);
+                    ans.push('=');
+                    ans.push_str(value);
+                }
+            }
+
+            ans.push('\n');
+        })
+        .also(|ans| {
+            // <CanonicalHeaders>\n
+
+            // FIXME: check HOST, Content-Type, x-amz-security-token, x-amz-content-sha256
+
+            for &(name, value) in headers.as_ref().iter() {
+                if is_skipped_header(name) {
+                    continue;
+                }
+                ans.push_str(name);
+                ans.push(':');
+                ans.push_str(value.trim());
+                ans.push('\n');
+            }
+            ans.push('\n');
+        })
+        .also(|ans| {
+            // <SignedHeaders>\n
+            let mut first_flag = true;
+            for &(name, _) in headers.as_ref().iter() {
+                if is_skipped_header(name) {
+                    continue;
+                }
+                if first_flag {
+                    first_flag = false;
+                } else {
+                    ans.push(';');
+                }
+                ans.push_str(name);
+            }
+
+            ans.push('\n');
+        })
+        .also(|ans| {
+            // <Payload>
+            ans.push_str("UNSIGNED-PAYLOAD")
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::OrderedQs;
 
     #[test]
     fn example_get_object() {
@@ -281,9 +390,10 @@ mod tests {
         ]);
 
         let method = Method::GET;
+        let qs: &[(String, String)] = &[];
 
         let canonical_request =
-            create_canonical_request(&method, path, &[], &headers, Payload::Empty);
+            create_canonical_request(&method, path, qs, &headers, Payload::Empty);
 
         assert_eq!(
             canonical_request,
@@ -342,11 +452,12 @@ mod tests {
 
         let method = Method::PUT;
         let payload = "Welcome to Amazon S3.";
+        let qs: &[(String, String)] = &[];
 
         let canonical_request = create_canonical_request(
             &method,
             path,
-            &[],
+            qs,
             &headers,
             Payload::SingleChunk(payload.as_bytes()),
         );
@@ -407,9 +518,10 @@ mod tests {
         ]);
 
         let method = Method::PUT;
+        let qs: &[(String, String)] = &[];
 
         let canonical_request =
-            create_canonical_request(&method, path, &[], &headers, Payload::MultipleChunks);
+            create_canonical_request(&method, path, qs, &headers, Payload::MultipleChunks);
 
         assert_eq!(
             canonical_request,
@@ -548,7 +660,7 @@ mod tests {
             ("x-amz-date", "20130524T000000Z"),
         ]);
 
-        let query_strings = &[("lifecycle".into(), "".into())];
+        let query_strings = &[("lifecycle", "")];
 
         let method = Method::GET;
 
@@ -606,10 +718,7 @@ mod tests {
             ("x-amz-date", "20130524T000000Z"),
         ]);
 
-        let query_strings = &[
-            ("max-keys".into(), "2".into()),
-            ("prefix".into(), "J".into()),
-        ];
+        let query_strings = &[("max-keys", "2"), ("prefix", "J")];
 
         let method = Method::GET;
 
@@ -648,5 +757,92 @@ mod tests {
             signature,
             "34b48302e7b5fa45bde8084f4b7868a86f0a534bc59db6670ed5711ef69dc6f7"
         );
+    }
+
+    #[test]
+    fn example_presigned_url() {
+        use hyper::Uri;
+
+        // let access_key_id = "AKIAIOSFODNN7EXAMPLE";
+        let secret_access_key = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY";
+
+        let method = Method::GET;
+
+        let uri = Uri::from_static(concat!(
+            "https://s3.amazonaws.com/test.txt",
+            "?X-Amz-Algorithm=AWS4-HMAC-SHA256",
+            "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request",
+            "&X-Amz-Date=20130524T000000Z",
+            "&X-Amz-Expires=86400",
+            "&X-Amz-SignedHeaders=host",
+            "&X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404"
+        ));
+
+        let headers =
+            OrderedHeaders::from_slice_unchecked(&[("host", "examplebucket.s3.amazonaws.com")]);
+
+        let query_strings = &[
+            ("X-Amz-Algorithm", "AWS4-HMAC-SHA256"),
+            (
+                "X-Amz-Credential",
+                "AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request",
+            ),
+            ("X-Amz-Date", "20130524T000000Z"),
+            ("X-Amz-Expires", "86400"),
+            ("X-Amz-SignedHeaders", "host"),
+            (
+                "X-Amz-Signature",
+                "aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404",
+            ),
+        ];
+
+        let qs = OrderedQs::from_vec_unchecked(
+            query_strings
+                .iter()
+                .map(|&(n, v)| (n.to_owned(), v.to_owned()))
+                .collect(),
+        );
+
+        let info = PresignedUrl::from_query(&qs).unwrap();
+
+        let canonical_request =
+            create_presigned_canonical_request(&method, uri.path(), query_strings, &headers);
+
+        assert_eq!(canonical_request,concat!(
+            "GET\n",
+            "/test.txt\n",
+            "X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20130524%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20130524T000000Z&X-Amz-Expires=86400&X-Amz-SignedHeaders=host\n",
+            "host:examplebucket.s3.amazonaws.com\n",
+            "\n",
+            "host\n",
+            "UNSIGNED-PAYLOAD",
+        ));
+
+        let string_to_sign = create_string_to_sign(
+            &canonical_request,
+            &info.amz_date,
+            info.credential.aws_region,
+        );
+        assert_eq!(
+            string_to_sign,
+            concat!(
+                "AWS4-HMAC-SHA256\n",
+                "20130524T000000Z\n",
+                "20130524/us-east-1/s3/aws4_request\n",
+                "3bfa292879f6447bbcda7001decf97f4a54dc650c8942174ae0a9121cf58ad04",
+            )
+        );
+
+        let signature = calculate_signature(
+            &string_to_sign,
+            secret_access_key,
+            &info.amz_date,
+            info.credential.aws_region,
+        );
+        assert_eq!(
+            signature,
+            "aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404"
+        );
+        assert_eq!(signature, info.signature);
     }
 }

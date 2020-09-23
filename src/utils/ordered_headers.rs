@@ -17,7 +17,6 @@ impl<'a> OrderedHeaders<'a> {
     ///
     /// + header names must be lowercase
     /// + header values must be valid
-    /// + slice must be sorted
     #[cfg(test)]
     pub fn from_slice_unchecked(slice: &[(&'a str, &'a str)]) -> Self {
         let mut headers = SmallVec::new();
@@ -40,10 +39,13 @@ impl<'a> OrderedHeaders<'a> {
     }
 
     /// signed headers must be sorted
-    pub fn map_signed_headers(&self, signed_headers: &[&str]) -> Self {
+    pub fn map_signed_headers(&self, signed_headers: &[impl AsRef<str>]) -> Self {
         let mut headers: SmallVec<[(&'a str, &'a str); 16]> = SmallVec::new();
         for &(name, value) in self.headers.iter() {
-            if signed_headers.binary_search(&name).is_ok() {
+            if signed_headers
+                .binary_search_by(|probe| probe.as_ref().cmp(name))
+                .is_ok()
+            {
                 headers.push((name, value));
             }
         }
