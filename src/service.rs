@@ -173,7 +173,7 @@ fn extract_amz_content_sha256<'a>(
         .apply(AmzContentSha256::from_header_str)
         .map_err(|_| {
             code_error(
-                S3ErrorCode::InvalidRequest,
+                S3ErrorCode::XAmzContentSHA256Mismatch,
                 "Invalid header: x-amz-content-sha256",
             )
         })
@@ -350,6 +350,8 @@ impl S3Service {
 
     /// check signature (v4)
     async fn check_signature(&self, ctx: &mut ReqContext<'_>) -> S3Result<()> {
+        let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
+
         // --- query auth ---
         if let Some(qs) = ctx.query_strings.as_ref() {
             if qs.get("X-Amz-Signature").is_some() {
@@ -358,9 +360,6 @@ impl S3Service {
         }
 
         // --- header auth ---
-
-        let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
-
         let is_stream = match &amz_content_sha256 {
             AmzContentSha256::UnsignedPayload => return Ok(()),
             AmzContentSha256::SingleChunk { .. } => false,

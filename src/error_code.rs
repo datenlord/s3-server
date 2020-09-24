@@ -270,6 +270,9 @@ pub enum S3ErrorCode {
 
     /// The bucket POST must contain the specified field name. If it is specified, check the order of the fields.
     UserKeyMustBeSpecified,
+
+    /// [Custom error code]
+    XAmzContentSHA256Mismatch,
 }
 
 impl Display for S3ErrorCode {
@@ -366,6 +369,7 @@ impl S3ErrorCode {
             Self::UnexpectedContent => Some(StatusCode::BAD_REQUEST),
             Self::UnresolvableGrantByEmailAddress => Some(StatusCode::BAD_REQUEST),
             Self::UserKeyMustBeSpecified => Some(StatusCode::BAD_REQUEST),
+            Self::XAmzContentSHA256Mismatch => Some(StatusCode::BAD_REQUEST),
         }
     }
 
@@ -466,6 +470,7 @@ impl S3ErrorCode {
             UnexpectedContent,
             UnresolvableGrantByEmailAddress,
             UserKeyMustBeSpecified,
+            XAmzContentSHA256Mismatch,
         ]
     }
 }

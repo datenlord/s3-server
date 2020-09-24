@@ -298,7 +298,6 @@ fn poll_read_data<S: Stream<Item = io::Result<Bytes>> + Send + 'static>(
                     return Poll::Ready(Some(Err(ChunkedStreamError::Io(e))));
                 }
                 Some(Ok(bytes)) => {
-                    dbg!(&bytes);
                     let opt = push_bytes(bytes);
                     if opt.is_some() {
                         break 'outer opt;
