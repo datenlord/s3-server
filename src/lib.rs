@@ -57,6 +57,7 @@ mod auth;
 mod chunked_stream;
 mod error;
 mod error_code;
+mod multipart;
 mod ops;
 mod output;
 mod service;

@@ -29,6 +29,11 @@ impl<T, E> Yielder<T, E> {
     pub fn yield_iter(&mut self, iter: impl Iterator<Item = T>) {
         self.q.borrow_mut().extend(iter.map(Ok))
     }
+
+    /// yield one value
+    pub fn yield_one(&mut self, item: T) {
+        self.q.borrow_mut().push_back(Ok(item));
+    }
 }
 
 impl<T, E, G> AsyncTryStream<T, E, G>
