@@ -18,6 +18,7 @@ pub use self::request::RequestExt;
 pub use self::response::ResponseExt;
 pub use self::xml::XmlWriterExt;
 
+pub mod async_stream;
 pub mod crypto;
 pub mod time;
 
