@@ -1,12 +1,15 @@
 //! [`PutObject`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html)
 
-use crate::error::S3Result;
-use crate::output::{wrap_output, S3Output};
 use crate::utils::{Apply, RequestExt, ResponseExt};
+use crate::{error::S3Result, multipart::Multipart};
+use crate::{
+    output::{wrap_output, S3Output},
+    utils::OrderedHeaders,
+};
 use crate::{Body, BoxStdError, Request, Response};
 
 use futures::stream::StreamExt;
-use std::io;
+use std::{collections::HashMap, io, mem};
 
 use crate::dto::{ByteStream, PutObjectError, PutObjectOutput, PutObjectRequest};
 use crate::headers::names::{
@@ -23,28 +26,69 @@ use hyper::header::{
     CONTENT_TYPE, ETAG, EXPIRES,
 };
 
+/// transform stream
+fn transform_stream(body: Body) -> ByteStream {
+    body.map(|try_chunk| {
+        try_chunk.map(|c| c).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error obtaining chunk: {}", e),
+            )
+        })
+    })
+    .apply(ByteStream::new)
+}
+
+/// extract from multipart
+fn extract_from_multipart(
+    input: &mut PutObjectRequest,
+    mut multipart: Multipart,
+) -> Result<(), BoxStdError> {
+    multipart.assign_from_optional_field("acl", &mut input.acl)?;
+    multipart.assign_from_optional_field("content-type", &mut input.content_type)?;
+    multipart.assign_from_optional_field("expires", &mut input.expires)?;
+    multipart.assign_from_optional_field("tagging", &mut input.tagging)?;
+    multipart.assign_from_optional_field("x-amz-storage-class", &mut input.storage_class)?;
+
+    let mut metadata: HashMap<String, String> = HashMap::new();
+    for (name, value) in &mut multipart.fields {
+        name.make_ascii_lowercase();
+        let meta_prefix = "x-amz-meta-";
+        if name.starts_with(meta_prefix) {
+            let (_, meta_key) = name.split_at(meta_prefix.len());
+            if !meta_key.is_empty() {
+                let _ = metadata.insert(meta_key.to_owned(), mem::take(value));
+            }
+        }
+    }
+    if !metadata.is_empty() {
+        input.metadata = Some(metadata);
+    }
+    // TODO: how to handle the other fields?
+
+    input.body = multipart
+        .file
+        .stream
+        .apply(Body::wrap_stream)
+        .apply(transform_stream)
+        .apply(Some);
+
+    Ok(())
+}
+
 /// extract operation request
 pub fn extract(
     req: &Request,
     body: Body,
     bucket: &str,
     key: &str,
+    multipart: Option<Multipart>,
+    headers: &OrderedHeaders<'_>,
 ) -> Result<PutObjectRequest, BoxStdError> {
-    let body = body
-        .map(|try_chunk| {
-            try_chunk.map(|c| c).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Error obtaining chunk: {}", e),
-                )
-            })
-        })
-        .apply(ByteStream::new);
-
     let mut input: PutObjectRequest = PutObjectRequest {
         bucket: bucket.into(),
         key: key.into(),
-        body: Some(body),
+        body: None,
         ..PutObjectRequest::default()
     };
 
@@ -104,6 +148,25 @@ pub fn extract(
         &*X_AMZ_OBJECT_LOCK_LEGAL_HOLD,
         &mut input.object_lock_legal_hold_status,
     )?;
+
+    let mut metadata: HashMap<String, String> = HashMap::new();
+    for &(name, value) in headers.as_ref() {
+        let meta_prefix = "x-amz-meta-";
+        if name.starts_with(meta_prefix) {
+            let (_, meta_key) = name.split_at(meta_prefix.len());
+            if !meta_key.is_empty() {
+                let _ = metadata.insert(meta_key.to_owned(), value.to_owned());
+            }
+        }
+    }
+    if !metadata.is_empty() {
+        input.metadata = Some(metadata);
+    }
+
+    match multipart {
+        None => input.body = body.apply(transform_stream).apply(Some),
+        Some(multipart) => extract_from_multipart(&mut input, multipart)?,
+    };
 
     Ok(input)
 }

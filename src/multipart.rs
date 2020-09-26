@@ -7,32 +7,65 @@
 
 use crate::utils::{async_stream::AsyncTryStream, Also, Apply};
 
-use std::{io, mem, pin::Pin};
+use std::{io, mem, pin::Pin, str::FromStr};
 
 use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 use memchr::memchr_iter;
 
 /// form file
-struct File {
+
+#[derive(Debug)]
+pub struct File {
     /// name
-    name: String,
+    pub name: String,
     /// content type
-    content_type: String,
+    pub content_type: String,
     /// stream
-    stream: FileStream,
+    pub stream: FileStream,
 }
 
 /// multipart/form-data for POST Object
-struct Multipart {
+#[derive(Debug)]
+pub struct Multipart {
     /// fields
-    fields: Vec<(String, String)>,
+    pub fields: Vec<(String, String)>,
     /// file
-    file: File,
+    pub file: File,
+}
+
+impl Multipart {
+    /// find field value
+    pub fn find_field_value<'a>(&'a self, name: &str) -> Option<&'a str> {
+        self.fields.iter().rev().find_map(|(n, v)| {
+            if n.eq_ignore_ascii_case(name) {
+                Some(v.as_str())
+            } else {
+                None
+            }
+        })
+    }
+
+    /// assign from optional field
+    pub fn assign_from_optional_field<T>(
+        &self,
+        name: &str,
+        opt: &mut Option<T>,
+    ) -> Result<(), T::Err>
+    where
+        T: FromStr,
+        T::Err: std::error::Error + Send + Sync + 'static,
+    {
+        if let Some(s) = self.find_field_value(name) {
+            let v = s.parse()?;
+            *opt = Some(v);
+        }
+        Ok(())
+    }
 }
 
 /// transform multipart
-async fn transform_multipart<S>(body_stream: S, boundary: &'_ [u8]) -> io::Result<Multipart>
+pub async fn transform_multipart<S>(body_stream: S, boundary: &'_ [u8]) -> io::Result<Multipart>
 where
     S: Stream<Item = io::Result<Bytes>> + Send + 'static,
 {
@@ -182,7 +215,7 @@ where
 
 #[derive(Debug, thiserror::Error)]
 /// File stream error
-enum FileStreamError {
+pub enum FileStreamError {
     /// Incomplete error
     #[error("FileStreamError: Incomplete")]
     Incomplete,
@@ -192,7 +225,8 @@ enum FileStreamError {
 }
 
 /// File stream
-struct FileStream {
+#[derive(Debug)]
+pub struct FileStream {
     /// inner stream
     inner: AsyncTryStream<Bytes, FileStreamError>,
 }

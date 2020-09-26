@@ -1,6 +1,7 @@
 //! async stream
 
 use std::collections::VecDeque;
+use std::fmt::{self, Debug};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -79,5 +80,11 @@ where
                 }
             }
         }
+    }
+}
+
+impl<T, E, G> Debug for AsyncTryStream<T, E, G> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "AsyncTryStream{{...}}")
     }
 }

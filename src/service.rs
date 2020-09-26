@@ -8,17 +8,18 @@ use crate::{
     headers::AmzContentSha256,
     headers::AmzDate,
     headers::AuthorizationV4,
-    ops,
+    headers::CredentialV4,
+    multipart, ops,
     output::S3Output,
     path::S3Path,
-    path::S3PathErrorKind,
+    path::{self, S3PathErrorKind},
     query::GetQuery,
     query::PostQuery,
     signature_v4::{self, Payload},
     storage::S3Storage,
     utils::Also,
     utils::OrderedHeaders,
-    utils::{Apply, OrderedQs, RequestExt},
+    utils::{crypto, Apply, OrderedQs, RequestExt},
     BoxStdError, Request, Response, S3ErrorCode,
 };
 
@@ -31,13 +32,17 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::future::BoxFuture;
-use futures::stream::StreamExt;
+use bytes::Bytes;
 use hyper::{
-    header::{AsHeaderName, AUTHORIZATION},
+    header::{AsHeaderName, AUTHORIZATION, CONTENT_TYPE},
     Body, Method,
 };
+
+use futures::{future::BoxFuture, stream::StreamExt, Stream};
+
 use log::{debug, error};
+use mime::Mime;
+use multipart::Multipart;
 use serde::de::DeserializeOwned;
 
 /// Generic S3 service which wraps a S3 storage
@@ -156,6 +161,22 @@ struct ReqContext<'a> {
     body: Body,
     /// s3 path
     path: S3Path<'a>,
+    /// mime
+    mime: Option<Mime>,
+    /// multipart/form-data
+    multipart: Option<Multipart>,
+}
+
+/// Create a `S3Error::Other`
+macro_rules! code_error {
+    ($code:expr,$msg:expr) => {{
+        let msg_string: String = $msg.into();
+        debug!(
+            "generate code error: code = {:?}, msg = {}",
+            $code, msg_string
+        );
+        S3Error::Other(XmlErrorResponse::from_code_msg($code, msg_string))
+    }};
 }
 
 /// extract `AmzContentSha256` from headers
@@ -165,16 +186,16 @@ fn extract_amz_content_sha256<'a>(
     headers
         .get(&*X_AMZ_CONTENT_SHA256)
         .ok_or_else(|| {
-            code_error(
+            code_error!(
                 S3ErrorCode::InvalidRequest,
-                "Missing header: x-amz-content-sha256",
+                "Missing header: x-amz-content-sha256"
             )
         })?
         .apply(AmzContentSha256::from_header_str)
         .map_err(|_| {
-            code_error(
+            code_error!(
                 S3ErrorCode::XAmzContentSHA256Mismatch,
-                "Invalid header: x-amz-content-sha256",
+                "Invalid header: x-amz-content-sha256"
             )
         })
 }
@@ -183,23 +204,30 @@ fn extract_amz_content_sha256<'a>(
 fn extract_authorization_v4<'a>(headers: &'_ OrderedHeaders<'a>) -> S3Result<AuthorizationV4<'a>> {
     headers
         .get(AUTHORIZATION)
-        .ok_or_else(|| code_error(S3ErrorCode::InvalidRequest, "Missing header: Authorization"))?
+        .ok_or_else(|| code_error!(S3ErrorCode::InvalidRequest, "Missing header: Authorization"))?
         .apply(AuthorizationV4::from_header_str)
-        .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid header: Authorization"))
+        .map_err(|_| code_error!(S3ErrorCode::InvalidRequest, "Invalid header: Authorization"))
 }
 
 /// extract `AmzDate` from headers
 fn extract_amz_date(headers: &'_ OrderedHeaders<'_>) -> S3Result<AmzDate> {
     headers
         .get(&*X_AMZ_DATE)
-        .ok_or_else(|| code_error(S3ErrorCode::InvalidRequest, "Missing header: x-amz-date"))?
+        .ok_or_else(|| code_error!(S3ErrorCode::InvalidRequest, "Missing header: x-amz-date"))?
         .apply(AmzDate::from_header_str)
-        .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid header: x-amz-date"))
+        .map_err(|_| code_error!(S3ErrorCode::InvalidRequest, "Invalid header: x-amz-date"))
 }
 
-/// Create a `S3Error::Other`
-fn code_error(code: S3ErrorCode, msg: &'static str) -> S3Error {
-    S3Error::Other(XmlErrorResponse::from_code_msg(code, msg.to_owned()))
+/// replace `body` with an empty body and transform it to IO stream
+fn take_io_body(body: &mut Body) -> impl Stream<Item = io::Result<Bytes>> + Send + 'static {
+    mem::replace(body, Body::empty()).map(|try_chunk| {
+        try_chunk.map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Error obtaining chunk: {}", e),
+            )
+        })
+    })
 }
 
 impl S3Service {
@@ -271,18 +299,29 @@ impl S3Service {
                     (S3ErrorCode::KeyTooLongError, "Your key is too long.")
                 }
             }
-            .apply(|(code, msg)| code_error(code, msg))
+            .apply(|(code, msg)| code_error!(code, msg))
         })?;
 
         let headers = OrderedHeaders::from_req(&req)
-            .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid headers"))?;
+            .map_err(|_| code_error!(S3ErrorCode::InvalidRequest, "Invalid headers"))?;
 
         let query_strings: Option<OrderedQs> = req
             .uri()
             .query()
             .map(OrderedQs::from_query)
             .transpose()
-            .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Invalid query strings"))?;
+            .map_err(|_| code_error!(S3ErrorCode::InvalidRequest, "Invalid query strings"))?;
+
+        let mime = {
+            headers
+                .get(CONTENT_TYPE)
+                .map(|value| {
+                    value.parse::<Mime>().map_err(|_| {
+                        code_error!(S3ErrorCode::InvalidRequest, "Invalid header: Content-Type")
+                    })
+                })
+                .transpose()?
+        };
 
         let mut ctx: ReqContext<'_> = ReqContext {
             req: &req,
@@ -290,6 +329,8 @@ impl S3Service {
             query_strings,
             path,
             body,
+            mime,
+            multipart: None,
         };
 
         self.check_signature(&mut ctx).await?;
@@ -310,7 +351,7 @@ impl S3Service {
         let qs = ctx.query_strings.as_ref().unwrap_or_else(|| unreachable!());
 
         let presigned_url = signature_v4::PresignedUrl::from_query(qs)
-            .map_err(|_| code_error(S3ErrorCode::InvalidRequest, "Missing presigned fields"))?;
+            .map_err(|_| code_error!(S3ErrorCode::InvalidRequest, "Missing presigned fields"))?;
 
         let auth_provider = match self.auth {
             Some(ref a) => &**a,
@@ -320,7 +361,9 @@ impl S3Service {
         let secret_key = auth_provider
             .get_secret_access_key(presigned_url.credential.access_key_id)
             .await?
-            .ok_or_else(|| code_error(S3ErrorCode::NotSignedUp, "Your account is not signed up"))?;
+            .ok_or_else(|| {
+                code_error!(S3ErrorCode::NotSignedUp, "Your account is not signed up")
+            })?;
 
         let signature = {
             let canonical_request = signature_v4::create_presigned_canonical_request(
@@ -339,11 +382,114 @@ impl S3Service {
         };
 
         if signature != presigned_url.signature {
-            return Err(code_error(
+            return Err(code_error!(
                 S3ErrorCode::SignatureDoesNotMatch,
-                "The request signature we calculated does not match the signature you provided.",
+                "The request signature we calculated does not match the signature you provided."
             ));
         }
+
+        Ok(())
+    }
+
+    /// check POST signature (v4)
+    async fn check_post_signature(&self, ctx: &mut ReqContext<'_>) -> S3Result<()> {
+        /// util method
+        fn find_info(multipart: &Multipart) -> Option<(&str, &str, &str, &str, &str)> {
+            let policy = multipart.find_field_value("policy")?;
+            let x_amz_algorithm = multipart.find_field_value("x-amz-algorithm")?;
+            let x_amz_credential = multipart.find_field_value("x-amz-credential")?;
+            let x_amz_date = multipart.find_field_value("x-amz-date")?;
+            let x_amz_signature = multipart.find_field_value("x-amz-signature")?;
+            Some((
+                policy,
+                x_amz_algorithm,
+                x_amz_credential,
+                x_amz_date,
+                x_amz_signature,
+            ))
+        }
+
+        let auth_provider = match self.auth {
+            Some(ref a) => &**a,
+            None => return Err(S3Error::NotSupported),
+        };
+
+        let mime = ctx.mime.as_ref().unwrap_or_else(|| unreachable!());
+
+        let boundary = mime
+            .get_param(mime::BOUNDARY)
+            .ok_or_else(|| code_error!(S3ErrorCode::InvalidRequest, "Missing boundary"))?;
+
+        let body = take_io_body(&mut ctx.body);
+
+        let multipart = multipart::transform_multipart(body, boundary.as_str().as_bytes())
+            .await
+            .map_err(|e| code_error!(S3ErrorCode::InvalidRequest, e.to_string()))?;
+
+        let (policy, x_amz_algorithm, x_amz_credential, x_amz_date, x_amz_signature) = {
+            match find_info(&multipart) {
+                None => {
+                    return Err(code_error!(
+                        S3ErrorCode::InvalidRequest,
+                        "Missing required fields"
+                    ))
+                }
+                Some(ans) => ans,
+            }
+        };
+
+        // check policy
+        if !crypto::is_base64_encoded(policy.as_bytes()) {
+            return Err(code_error!(
+                S3ErrorCode::InvalidRequest,
+                "Invalid field: policy"
+            ));
+        }
+
+        // check x_amz_algorithm
+        if x_amz_algorithm != "AWS4-HMAC-SHA256" {
+            return Err(S3Error::NotSupported);
+        }
+
+        // check x_amz_credential
+        let (_, credential) = CredentialV4::parse_by_nom(x_amz_credential).map_err(|_| {
+            code_error!(
+                S3ErrorCode::InvalidRequest,
+                "Invalid field: x-amz-credential"
+            )
+        })?;
+
+        // check x_amz_date
+        let amz_date = AmzDate::from_header_str(x_amz_date)
+            .map_err(|_| code_error!(S3ErrorCode::InvalidRequest, "Invalid field: x-amz-date"))?;
+
+        // fetch secret_key
+        let secret_key = auth_provider
+            .get_secret_access_key(credential.access_key_id)
+            .await?
+            .ok_or_else(|| {
+                code_error!(S3ErrorCode::NotSignedUp, "Your account is not signed up")
+            })?;
+
+        // calculate signature
+        let string_to_sign = policy;
+        let signature = signature_v4::calculate_signature(
+            string_to_sign,
+            &secret_key,
+            &amz_date,
+            credential.aws_region,
+        );
+
+        // check x_amz_signature
+        if signature != x_amz_signature {
+            return Err(code_error!(
+                S3ErrorCode::SignatureDoesNotMatch,
+                "The request signature we calculated does not match the signature you provided."
+            ));
+        }
+
+        // store ctx value
+        ctx.multipart = Some(multipart);
 
         Ok(())
     }
@@ -351,6 +497,15 @@ impl S3Service {
     /// check signature (v4)
     async fn check_signature(&self, ctx: &mut ReqContext<'_>) -> S3Result<()> {
         let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
+
+        // --- POST auth ---
+        if ctx.req.method() == Method::POST {
+            if let Some(mime) = ctx.mime.as_ref() {
+                if mime.type_() == mime::MULTIPART && mime.subtype() == mime::FORM_DATA {
+                    return self.check_post_signature(ctx).await;
+                }
+            }
+        }
 
         // --- query auth ---
         if let Some(qs) = ctx.query_strings.as_ref() {
@@ -377,7 +532,9 @@ impl S3Service {
         let secret_key = auth_provider
             .get_secret_access_key(auth.credential.access_key_id)
             .await?
-            .ok_or_else(|| code_error(S3ErrorCode::NotSignedUp, "Your account is not signed up"))?;
+            .ok_or_else(|| {
+                code_error!(S3ErrorCode::NotSignedUp, "Your account is not signed up")
+            })?;
 
         let amz_date = extract_amz_date(&ctx.headers)?;
 
@@ -430,21 +587,14 @@ impl S3Service {
         };
 
         if signature != auth.signature {
-            return Err(code_error(
+            return Err(code_error!(
                 S3ErrorCode::SignatureDoesNotMatch,
-                "The request signature we calculated does not match the signature you provided.",
+                "The request signature we calculated does not match the signature you provided."
             ));
         }
 
         if is_stream {
-            let body = mem::replace(&mut ctx.body, Body::empty()).map(|try_chunk| {
-                try_chunk.map_err(|e| {
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("Error obtaining chunk: {}", e),
-                    )
-                })
-            });
+            let body = take_io_body(&mut ctx.body);
 
             let chunked_stream = ChunkedStream::new(
                 body,
@@ -497,7 +647,12 @@ impl S3Service {
     /// handle POST request
     async fn handle_post(&self, ctx: ReqContext<'_>) -> S3Result<Response> {
         let ReqContext {
-            req, path, body, ..
+            req,
+            path,
+            body,
+            headers,
+            multipart,
+            ..
         } = ctx;
 
         match path {
@@ -512,6 +667,23 @@ impl S3Service {
                     return call_s3_operation!(delete_objects with async (req, body, bucket) by self.storage);
                 }
 
+                if let Some(multipart) = multipart {
+                    let key = {
+                        let key_str = multipart.find_field_value("key").ok_or_else(|| {
+                            code_error!(S3ErrorCode::UserKeyMustBeSpecified, "Missing key")
+                        })?;
+
+                        if path::check_key(key_str) {
+                            key_str.to_owned()
+                        } else {
+                            return Err(code_error!(
+                                S3ErrorCode::KeyTooLongError,
+                                "Your key is too long."
+                            ));
+                        }
+                    };
+                    return call_s3_operation!(put_object with (req, body, bucket,&key,Some(multipart),&headers) by self.storage);
+                }
                 // TODO: impl handler
 
                 Err(S3Error::NotSupported)
@@ -526,7 +698,12 @@ impl S3Service {
     /// handle PUT request
     async fn handle_put(&self, ctx: ReqContext<'_>) -> S3Result<Response> {
         let ReqContext {
-            req, path, body, ..
+            req,
+            path,
+            body,
+            multipart,
+            headers,
+            ..
         } = ctx;
 
         match path {
@@ -538,7 +715,7 @@ impl S3Service {
                 if let Some(copy_source) = extract_header(req, &*X_AMZ_COPY_SOURCE)? {
                     return call_s3_operation!(copy_object with (req, bucket,key,copy_source) by self.storage);
                 }
-                call_s3_operation!(put_object with (req,body,bucket,key) by self.storage)
+                call_s3_operation!(put_object with (req,body,bucket,key,multipart,&headers) by self.storage)
             }
         }
     }
