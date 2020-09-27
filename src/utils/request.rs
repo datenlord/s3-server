@@ -1,13 +1,11 @@
 //! request util
 
-use crate::{path::ParseS3PathError, path::S3Path, BoxStdError, Request};
+use crate::{path::ParseS3PathError, path::S3Path, Body, BoxStdError, Request};
 
-use hyper::{
-    header::{AsHeaderName, HeaderValue, ToStrError},
-    Body,
-};
-use serde::de::DeserializeOwned;
 use std::{mem, str::FromStr};
+
+use hyper::header::{AsHeaderName, HeaderValue, ToStrError};
+use serde::de::DeserializeOwned;
 
 /// `RequestExt`
 pub trait RequestExt {

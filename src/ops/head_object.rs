@@ -131,6 +131,10 @@ impl S3Output for HeadObjectOutput {
                 self.object_lock_legal_hold_status,
             )?;
 
+            if let Some(ref metadata) = self.metadata {
+                res.set_metadata_headers(metadata)?;
+            }
+
             Ok(())
         })
     }

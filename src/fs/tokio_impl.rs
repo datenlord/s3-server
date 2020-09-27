@@ -25,6 +25,7 @@ use crate::{
 };
 
 use std::{
+    collections::HashMap,
     collections::VecDeque,
     convert::TryInto,
     env,
@@ -72,6 +73,48 @@ impl FileSystem {
         let dir = Path::new(&bucket);
         let ans = dir.absolutize_virtually(&self.root)?.into();
         Ok(ans)
+    }
+
+    /// resolve metadata path under the virtual root (custom format)
+    fn get_metadata_path(&self, bucket: &str, key: &str) -> io::Result<PathBuf> {
+        let file_path_str = format!(
+            ".bucket-{}.object-{}.metadata.json",
+            base64::encode(bucket),
+            base64::encode(key),
+        );
+        let file_path = Path::new(&file_path_str);
+        let ans = file_path.absolutize_virtually(&self.root)?.into();
+        Ok(ans)
+    }
+
+    /// load metadata from fs
+    async fn load_metadata(
+        &self,
+        bucket: &str,
+        key: &str,
+    ) -> io::Result<Option<HashMap<String, String>>> {
+        let path = self.get_metadata_path(bucket, key)?;
+        if path.exists() {
+            let content = tokio::fs::read(&path).await?;
+            let map = serde_json::from_slice(&content)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            Ok(Some(map))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// save metadata
+    async fn save_metadata(
+        &self,
+        bucket: &str,
+        key: &str,
+        metadata: &HashMap<String, String>,
+    ) -> io::Result<()> {
+        let path = self.get_metadata_path(bucket, key)?;
+        let content = serde_json::to_vec(metadata)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        tokio::fs::write(&path, &content).await
     }
 }
 
@@ -130,10 +173,17 @@ impl S3Storage for FileSystem {
                     let src_path = self.get_object_path(bucket, key)?;
                     let dst_path = self.get_object_path(&input.bucket, &input.key)?;
 
-                    let metadata = tokio::fs::metadata(&src_path).await?;
-                    let last_modified = time::to_rfc3339(metadata.modified()?);
+                    let file_metadata = tokio::fs::metadata(&src_path).await?;
+                    let last_modified = time::to_rfc3339(file_metadata.modified()?);
 
                     let _ = tokio::fs::copy(src_path, dst_path).await?;
+
+                    {
+                        let src_metadata_path = self.get_metadata_path(bucket, key)?;
+                        let dst_metadata_path =
+                            self.get_metadata_path(&input.bucket, &input.key)?;
+                        let _ = tokio::fs::copy(src_metadata_path, dst_metadata_path).await?;
+                    }
 
                     let output = CopyObjectOutput {
                         copy_object_result: CopyObjectResult {
@@ -248,15 +298,18 @@ impl S3Storage for FileSystem {
                     )));
                 }
             };
-            let metadata = file.metadata().await?;
-            let last_modified = time::to_rfc3339(metadata.modified()?);
-            let content_length = metadata.len();
+            let file_metadata = file.metadata().await?;
+            let last_modified = time::to_rfc3339(file_metadata.modified()?);
+            let content_length = file_metadata.len();
             let stream = ByteStream::new(file, 4096);
+
+            let object_metadata = self.load_metadata(&input.bucket, &input.key).await?;
 
             let output: GetObjectOutput = GetObjectOutput {
                 body: Some(crate::dto::ByteStream::new(stream)),
                 content_length: Some(content_length.try_into()?),
                 last_modified: Some(last_modified),
+                metadata: object_metadata,
                 ..GetObjectOutput::default() // TODO: handle other fields
             };
 
@@ -290,13 +343,17 @@ impl S3Storage for FileSystem {
         wrap_storage(async move {
             let path = self.get_object_path(&input.bucket, &input.key)?;
             if path.exists() {
-                let metadata = tokio::fs::metadata(path).await?;
-                let last_modified = time::to_rfc3339(metadata.modified()?);
-                let size = metadata.len();
+                let file_metadata = tokio::fs::metadata(path).await?;
+                let last_modified = time::to_rfc3339(file_metadata.modified()?);
+                let size = file_metadata.len();
+
+                let object_metadata = self.load_metadata(&input.bucket, &input.key).await?;
+
                 let output: HeadObjectOutput = HeadObjectOutput {
                     content_length: Some(size.try_into()?),
                     content_type: Some(mime::APPLICATION_OCTET_STREAM.as_ref().to_owned()), // TODO: handle content type
                     last_modified: Some(last_modified),
+                    metadata: object_metadata,
                     ..HeadObjectOutput::default()
                 };
                 Ok(output)
@@ -485,6 +542,10 @@ impl S3Storage for FileSystem {
                     size,
                     duration
                 );
+                if let Some(ref metadata) = input.metadata {
+                    self.save_metadata(&input.bucket, &input.key, metadata)
+                        .await?;
+                }
             }
 
             let output = PutObjectOutput::default(); // TODO: handle other fields

@@ -136,6 +136,10 @@ impl S3Output for GetObjectOutput {
                 self.object_lock_legal_hold_status,
             )?;
 
+            if let Some(ref metadata) = self.metadata {
+                res.set_metadata_headers(metadata)?;
+            }
+
             if let Some(body) = self.body {
                 *res.body_mut() = Body::wrap_stream(body);
             }

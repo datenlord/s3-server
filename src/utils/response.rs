@@ -6,7 +6,7 @@ use hyper::{
     Body, StatusCode,
 };
 use mime::Mime;
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom};
 use xml::{common::XmlVersion, writer::XmlEvent, EventWriter};
 
 /// `ResponseExt`
@@ -31,6 +31,12 @@ pub trait ResponseExt {
     fn set_xml_body<F>(&mut self, cap: usize, f: F) -> Result<(), BoxStdError>
     where
         F: FnOnce(&mut EventWriter<&mut Vec<u8>>) -> Result<(), xml::writer::Error>;
+
+    /// set metadata headers
+    fn set_metadata_headers(
+        &mut self,
+        metadata: &HashMap<String, String>,
+    ) -> Result<(), BoxStdError>;
 }
 
 impl ResponseExt for Response {
@@ -81,6 +87,19 @@ impl ResponseExt for Response {
 
         *self.body_mut() = Body::from(body);
         self.set_mime(&mime::TEXT_XML)?;
+        Ok(())
+    }
+
+    fn set_metadata_headers(
+        &mut self,
+        metadata: &HashMap<String, String>,
+    ) -> Result<(), BoxStdError> {
+        let headers = self.headers_mut();
+        for (name, value) in metadata {
+            let header_name = HeaderName::from_bytes(format!("x-amz-meta-{}", name).as_bytes())?;
+            let header_value = HeaderValue::from_bytes(value.as_bytes())?;
+            let _ = headers.insert(header_name, header_value);
+        }
         Ok(())
     }
 }
