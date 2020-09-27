@@ -58,17 +58,18 @@ impl<'a> CredentialV4<'a> {
     /// parse by nom
     pub(crate) fn parse_by_nom(mut input: &'a str) -> nom::IResult<&'a str, Self> {
         use nom::{
-            bytes::complete::{tag, take_till1},
+            bytes::complete::{tag, take, take_till, take_till1},
             sequence::terminated,
         };
 
-        let slash_tail = terminated(take_till1(|c| c == '/'), tag("/"));
+        let slash_tail1 = terminated(take_till1(|c| c == '/'), take(1_usize));
+        let slash_tail0 = terminated(take_till(|c| c == '/'), take(1_usize));
 
-        parse_and_bind!(mut input => slash_tail => access_key_id);
-        parse_and_bind!(mut input => slash_tail => date);
+        parse_and_bind!(mut input => slash_tail1 => access_key_id);
+        parse_and_bind!(mut input => slash_tail1 => date);
         parse_and_bind!(date => Self::verify_date => _);
-        parse_and_bind!(mut input => slash_tail => aws_region);
-        parse_and_bind!(mut input => slash_tail => aws_service);
+        parse_and_bind!(mut input => slash_tail0 => aws_region);
+        parse_and_bind!(mut input => slash_tail1 => aws_service);
         parse_and_bind!(mut input => tag("aws4_request") => _);
 
         CredentialV4 {

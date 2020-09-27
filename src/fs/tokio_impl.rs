@@ -36,6 +36,8 @@ use std::{
 };
 
 use async_trait::async_trait;
+use futures::TryStreamExt;
+use md5::{Digest, Md5};
 use path_absolutize::Absolutize;
 
 use log::{debug, error};
@@ -97,10 +99,12 @@ impl FileSystem {
 
     /// resolve metadata path under the virtual root (custom format)
     fn get_metadata_path(&self, bucket: &str, key: &str) -> io::Result<PathBuf> {
+        let encode = |s: &str| base64::encode_config(s, base64::URL_SAFE_NO_PAD);
+
         let file_path_str = format!(
             ".bucket-{}.object-{}.metadata.json",
-            base64::encode(bucket),
-            base64::encode(key),
+            encode(bucket),
+            encode(key),
         );
         let file_path = Path::new(&file_path_str);
         let ans = file_path.absolutize_virtually(&self.root)?.into();
@@ -569,30 +573,53 @@ impl S3Storage for FileSystem {
             }
         }
 
+        let PutObjectRequest {
+            body,
+            bucket,
+            key,
+            metadata,
+            ..
+        } = input;
+
+        let body = body.ok_or_else(||{
+            S3Error::Other(
+                XmlErrorResponse::from_code_msg(
+                S3ErrorCode::IncompleteBody,
+                "You did not provide the number of bytes specified by the Content-Length HTTP header.".into(),))})?;
+
         wrap_storage(async move {
-            let path = self.get_object_path(&input.bucket, &input.key)?;
+            let path = self.get_object_path(&bucket, &key)?;
 
-            if let Some(body) = input.body {
-                let mut reader = tokio::io::stream_reader(body);
-                let file = File::create(&path).await?;
-                let mut writer = tokio::io::BufWriter::new(file);
+            let mut md5_hash = Md5::new();
+            let body = body.map_ok(|bytes| {
+                md5_hash.update(&bytes);
+                bytes
+            });
 
-                let (ret, duration) =
-                    time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
-                let size = ret?;
-                debug!(
-                    "PutObject: write file: path = {}, size = {}, duration = {:?}",
-                    path.display(),
-                    size,
-                    duration
-                );
-                if let Some(ref metadata) = input.metadata {
-                    self.save_metadata(&input.bucket, &input.key, metadata)
-                        .await?;
-                }
+            let mut reader = tokio::io::stream_reader(body);
+            let file = File::create(&path).await?;
+            let mut writer = tokio::io::BufWriter::new(file);
+
+            let (ret, duration) =
+                time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
+            let size = ret?;
+            debug!(
+                "PutObject: write file: path = {}, size = {}, duration = {:?}",
+                path.display(),
+                size,
+                duration
+            );
+            if let Some(ref metadata) = metadata {
+                self.save_metadata(&bucket, &key, metadata).await?;
             }
 
-            let output = PutObjectOutput::default(); // TODO: handle other fields
+            let md5_sum = md5_hash
+                .finalize()
+                .apply(|a| faster_hex::hex_string(&a))
+                .unwrap_or_else(|_| unreachable!());
+
+            let mut output = PutObjectOutput::default(); // TODO: handle other fields
+            output.e_tag = Some(format!("\"{}\"", md5_sum));
 
             Ok(Ok(output))
         })
