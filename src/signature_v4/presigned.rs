@@ -21,6 +21,7 @@ pub struct PresignedQs<'a> {
 }
 
 /// presigned url information
+#[derive(Debug)]
 pub struct PresignedUrl<'a> {
     /// algorithm
     pub algorithm: &'a str,

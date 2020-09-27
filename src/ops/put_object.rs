@@ -66,9 +66,9 @@ fn extract_from_multipart(
     }
     // TODO: how to handle the other fields?
 
-    input.body = multipart
-        .file
-        .stream
+    let file_stream = multipart.file.stream;
+
+    input.body = file_stream
         .apply(Body::wrap_stream)
         .apply(transform_stream)
         .apply(Some);

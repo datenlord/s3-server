@@ -19,7 +19,7 @@ pub fn hex_sha256(data: &[u8]) -> String {
     #[cfg(test)]
     debug_assert!(src.as_slice().len() == 32);
 
-    #[allow(clippy::unreachable)] // a sha256 hash string's length is always 64
+    // a sha256 hash string's length is always 64
     faster_hex::hex_string(src.as_ref()).unwrap_or_else(|_| unreachable!())
 }
 
@@ -32,13 +32,13 @@ pub fn hex_sha256_chunk(chunk_data: &[Bytes]) -> String {
     #[cfg(test)]
     debug_assert!(src.as_slice().len() == 32);
 
-    #[allow(clippy::unreachable)] // a sha256 hash string's length is always 64
+    // a sha256 hash string's length is always 64
     faster_hex::hex_string(src.as_ref()).unwrap_or_else(|_| unreachable!())
 }
 
 /// `hmac_sha256(key, data)`
 pub fn hmac_sha256(key: &[u8], data: &[u8]) -> impl AsRef<[u8]> {
-    #[allow(clippy::unreachable)] // HMAC can take key of any size
+    // HMAC can take key of any size
     let m = <Hmac<Sha256>>::new_varkey(key).unwrap_or_else(|_| unreachable!());
     m.also(|m| m.update(data.as_ref())).finalize().into_bytes()
 }
@@ -50,12 +50,11 @@ pub fn hex_hmac_sha256(key: &[u8], data: &[u8]) -> String {
     #[cfg(test)]
     debug_assert!(src.as_ref().len() == 32);
 
-    #[allow(clippy::unreachable)] // a hmac sha256 hash string's length is always 64
+    // a hmac sha256 hash string's length is always 64
     faster_hex::hex_string(src.as_ref()).unwrap_or_else(|_| unreachable!())
 }
 
 /// is base64 encoded
-#[allow(dead_code)]
 pub fn is_base64_encoded(bytes: &[u8]) -> bool {
     if bytes.len().wrapping_rem(4) != 0 {
         return false;

@@ -85,7 +85,7 @@ impl Clone for SharedS3Service {
 impl hyper::service::Service<Request> for SharedS3Service {
     type Response = Response;
 
-    type Error = S3Error;
+    type Error = BoxStdError;
 
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -172,10 +172,21 @@ macro_rules! code_error {
     ($code:expr,$msg:expr) => {{
         let msg_string: String = $msg.into();
         debug!(
-            "generate code error: code = {:?}, msg = {}",
-            $code, msg_string
+            "generate code error at {}:{}: code = {:?}, msg = {}",
+            file!(),
+            line!(),
+            $code,
+            msg_string
         );
         S3Error::Other(XmlErrorResponse::from_code_msg($code, msg_string))
+    }};
+}
+
+/// Create a `S3Error::NotSupported`
+macro_rules! not_supported {
+    () => {{
+        debug!("generate NotSupported at {}:{}", file!(), line!());
+        S3Error::NotSupported
     }};
 }
 
@@ -261,7 +272,7 @@ impl S3Service {
     /// Call the s3 service with `hyper::Request<hyper::Body>`
     /// # Errors
     /// Returns an `Err` if the service failed
-    pub async fn hyper_call(&self, req: Request) -> S3Result<Response> {
+    pub async fn hyper_call(&self, req: Request) -> Result<Response, BoxStdError> {
         let method = req.method().clone();
         let uri = req.uri().clone();
         debug!("{} \"{:?}\" request:\n{:#?}", method, uri, req);
@@ -274,12 +285,19 @@ impl S3Service {
             }
         });
 
-        match &result {
-            Ok(resp) => debug!("{} \"{:?}\" => response:\n{:#?}", method, uri, resp),
-            Err(err) => error!("{} \"{:?}\" => error:\n{:#?}", method, uri, err),
+        match result {
+            Ok(resp) => {
+                debug!("{} \"{:?}\" => response:\n{:#?}", method, uri, resp);
+                Ok(resp)
+            }
+            Err(err) => {
+                error!("{} \"{:?}\" => error:\n{:#?}", method, uri, err);
+                let resp =
+                    XmlErrorResponse::from_code_msg(S3ErrorCode::InternalError, err.to_string())
+                        .try_into_response()?;
+                Ok(resp)
+            }
         }
-
-        result
     }
 
     /// handle request
@@ -341,7 +359,7 @@ impl S3Service {
             Method::PUT => self.handle_put(ctx).await?,
             Method::DELETE => self.handle_delete(ctx).await?,
             Method::HEAD => self.handle_head(ctx).await?,
-            _ => return Err(S3Error::NotSupported),
+            _ => return Err(not_supported!()),
         };
         Ok(resp)
     }
@@ -355,7 +373,7 @@ impl S3Service {
 
         let auth_provider = match self.auth {
             Some(ref a) => &**a,
-            None => return Err(S3Error::NotSupported),
+            None => return Err(not_supported!()),
         };
 
         let secret_key = auth_provider
@@ -366,11 +384,15 @@ impl S3Service {
             })?;
 
         let signature = {
+            let headers = ctx
+                .headers
+                .map_signed_headers(&presigned_url.signed_headers);
+
             let canonical_request = signature_v4::create_presigned_canonical_request(
                 ctx.req.method(),
                 ctx.req.uri().path(),
                 qs.as_ref(),
-                &ctx.headers,
+                &headers,
             );
 
             let region = presigned_url.credential.aws_region;
@@ -411,7 +433,7 @@ impl S3Service {
 
         let auth_provider = match self.auth {
             Some(ref a) => &**a,
-            None => return Err(S3Error::NotSupported),
+            None => return Err(not_supported!()),
         };
 
         let mime = ctx.mime.as_ref().unwrap_or_else(|| unreachable!());
@@ -448,7 +470,7 @@ impl S3Service {
 
         // check x_amz_algorithm
         if x_amz_algorithm != "AWS4-HMAC-SHA256" {
-            return Err(S3Error::NotSupported);
+            return Err(not_supported!());
         }
 
         // check x_amz_credential
@@ -496,8 +518,6 @@ impl S3Service {
 
     /// check signature (v4)
     async fn check_signature(&self, ctx: &mut ReqContext<'_>) -> S3Result<()> {
-        let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
-
         // --- POST auth ---
         if ctx.req.method() == Method::POST {
             if let Some(mime) = ctx.mime.as_ref() {
@@ -514,6 +534,8 @@ impl S3Service {
             }
         }
 
+        let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
+
         // --- header auth ---
         let is_stream = match &amz_content_sha256 {
             AmzContentSha256::UnsignedPayload => return Ok(()),
@@ -523,7 +545,7 @@ impl S3Service {
 
         let auth_provider = match self.auth {
             Some(ref a) => &**a,
-            None => return Err(S3Error::NotSupported),
+            None => return Err(not_supported!()),
         };
 
         let auth: AuthorizationV4<'_> =
@@ -635,7 +657,7 @@ impl S3Service {
                     Some(2) => {
                         call_s3_operation!(list_objects_v2 with (req,query,bucket) by self.storage)
                     }
-                    Some(_) => Err(S3Error::NotSupported),
+                    Some(_) => Err(not_supported!()),
                 }
             }
             S3Path::Object { bucket, key } => {
@@ -656,17 +678,8 @@ impl S3Service {
         } = ctx;
 
         match path {
-            S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
+            S3Path::Root => Err(not_supported!()), // TODO: impl handler
             S3Path::Bucket { bucket } => {
-                let query = match extract_query::<PostQuery>(req)? {
-                    None => return Err(S3Error::NotSupported),
-                    Some(query) => query,
-                };
-
-                if query.delete.is_some() {
-                    return call_s3_operation!(delete_objects with async (req, body, bucket) by self.storage);
-                }
-
                 if let Some(multipart) = multipart {
                     let key = {
                         let key_str = multipart.find_field_value("key").ok_or_else(|| {
@@ -684,13 +697,30 @@ impl S3Service {
                     };
                     return call_s3_operation!(put_object with (req, body, bucket,&key,Some(multipart),&headers) by self.storage);
                 }
+
+                let query = match extract_query::<PostQuery>(req)? {
+                    None => return Err(not_supported!()),
+                    Some(query) => query,
+                };
+
+                if query.delete.is_some() {
+                    return call_s3_operation!(delete_objects with async (req, body, bucket) by self.storage);
+                }
+
                 // TODO: impl handler
 
-                Err(S3Error::NotSupported)
+                Err(not_supported!())
             }
             S3Path::Object { bucket, key } => {
-                dbg!((bucket, key)); // TODO: remove this place holder
-                Err(S3Error::NotSupported) // TODO: impl handler
+                if multipart.is_some() {
+                    return Err(code_error!(
+                        S3ErrorCode::MethodNotAllowed,
+                        "The specified method is not allowed against this resource."
+                    ));
+                }
+
+                let _ = (bucket, key); // TODO: remove this place holder
+                Err(not_supported!()) // TODO: impl handler
             }
         }
     }
@@ -707,7 +737,7 @@ impl S3Service {
         } = ctx;
 
         match path {
-            S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
+            S3Path::Root => Err(not_supported!()), // TODO: impl handler
             S3Path::Bucket { bucket } => {
                 call_s3_operation!(create_bucket with async (req, body, bucket) by self.storage)
             }
@@ -725,7 +755,7 @@ impl S3Service {
         let ReqContext { req, path, .. } = ctx;
 
         match path {
-            S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
+            S3Path::Root => Err(not_supported!()), // TODO: impl handler
             S3Path::Bucket { bucket } => {
                 call_s3_operation!(delete_bucket with (bucket) by self.storage)
             }
@@ -740,7 +770,7 @@ impl S3Service {
         let ReqContext { req, path, .. } = ctx;
 
         match path {
-            S3Path::Root => Err(S3Error::NotSupported), // TODO: impl handler
+            S3Path::Root => Err(not_supported!()), // TODO: impl handler
             S3Path::Bucket { bucket } => {
                 call_s3_operation!(head_bucket with (bucket) by self.storage)
             }

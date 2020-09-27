@@ -5,10 +5,6 @@
 //! See <https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html>
 //!
 
-// TODO: support POST auth
-
-#![allow(dead_code)]
-
 mod presigned;
 
 pub use self::presigned::PresignedUrl;
@@ -83,7 +79,6 @@ pub enum Payload<'a> {
     /// single chunk
     SingleChunk(&'a [u8]),
     /// multiple chunks
-    #[allow(dead_code)] // TODO: remove this allow
     MultipleChunks,
 }
 

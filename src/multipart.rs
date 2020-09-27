@@ -3,8 +3,6 @@
 //! See <https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html>
 //!
 
-#![allow(dead_code)] // TODO: remove this
-
 use crate::utils::{async_stream::AsyncTryStream, Also, Apply};
 
 use std::{io, mem, pin::Pin, str::FromStr};
@@ -64,6 +62,14 @@ impl Multipart {
     }
 }
 
+/// generate format error
+fn generate_format_error() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        "multipart/form-data format error",
+    )
+}
+
 /// transform multipart
 pub async fn transform_multipart<S>(body_stream: S, boundary: &'_ [u8]) -> io::Result<Multipart>
 where
@@ -79,13 +85,6 @@ where
         .also(|v| v.extend_from_slice(b"\r\n"))
         .into();
 
-    let generate_format_error = || {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "multipart/form-data format error",
-        )
-    };
-
     let mut fields = Vec::new();
 
     loop {
@@ -97,7 +96,7 @@ where
         };
 
         // try to parse
-        match try_parse(body, pat, &buf, &mut fields).await {
+        match try_parse(body, pat, &buf, &mut fields, boundary).await {
             Err((b, p)) => {
                 body = b;
                 pat = p;
@@ -113,17 +112,11 @@ async fn try_parse<S>(
     pat: Box<[u8]>,
     buf: &'_ [u8],
     fields: &'_ mut Vec<(String, String)>,
+    boundary: &'_ [u8],
 ) -> Result<io::Result<Multipart>, (Pin<Box<S>>, Box<[u8]>)>
 where
     S: Stream<Item = io::Result<Bytes>> + Send + 'static,
 {
-    let generate_format_error = || {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            "multipart/form-data format error",
-        )
-    };
-
     let pat_without_crlf = pat
         .get(..pat.len().wrapping_sub(2))
         .unwrap_or_else(|| unreachable!());
@@ -135,19 +128,23 @@ where
     // first line
     match lines.next_line() {
         None => return Err((body, pat)),
-        Some([]) => {}
-        Some(_) => return Ok(Err(generate_format_error())),
-    };
-
-    // first boundary
-    match lines.next_line() {
-        None => return Err((body, pat)),
+        Some([]) => {
+            // first boundary
+            match lines.next_line() {
+                None => return Err((body, pat)),
+                Some(line) => {
+                    if line != pat_without_crlf {
+                        return Ok(Err(generate_format_error()));
+                    };
+                }
+            }
+        }
         Some(line) => {
             if line != pat_without_crlf {
                 return Ok(Err(generate_format_error()));
-            };
+            }
         }
-    }
+    };
 
     let mut headers = [httparse::EMPTY_HEADER; 2];
     loop {
@@ -169,6 +166,7 @@ where
                 continue;
             }
         }
+
         let content_disposition = match content_disposition_bytes.map(parse_content_disposition) {
             None => return Err((body, pat)),
             Some(Err(_)) => return Ok(Err(generate_format_error())),
@@ -188,6 +186,7 @@ where
                         }
                     }
                 };
+
                 fields.push((content_disposition.name.to_owned(), value.to_owned()));
             }
             Some(filename) => {
@@ -197,7 +196,7 @@ where
                     Some(Ok(s)) => s,
                 };
                 let remaining_bytes = Bytes::copy_from_slice(lines.slice);
-                let file_stream = FileStream::new(body, pat, remaining_bytes);
+                let file_stream = FileStream::new(body, boundary, remaining_bytes);
                 let file = File {
                     name: filename.to_owned(),
                     content_type: content_type.to_owned(),
@@ -233,23 +232,28 @@ pub struct FileStream {
 
 impl FileStream {
     /// Constructs a `FileStream`
-    fn new<S>(mut body: Pin<Box<S>>, pat: Box<[u8]>, prev_bytes: Bytes) -> Self
+    fn new<S>(mut body: Pin<Box<S>>, boundary: &'_ [u8], prev_bytes: Bytes) -> Self
     where
         S: Stream<Item = io::Result<Bytes>> + Send + 'static,
     {
         <AsyncTryStream<Bytes, FileStreamError>>::new(|mut y| {
-            Box::pin(async move {
-                let crlf_pat: Box<[u8]> = Vec::new()
-                    .also(|v| v.extend_from_slice(b"\r\n"))
-                    .also(|v| v.extend_from_slice(&pat))
-                    .into();
-                drop(pat);
+            // `\r\n--{boundary}`
+            let crlf_pat: Box<[u8]> = Vec::new()
+                .also(|v| v.extend_from_slice(b"\r\n--"))
+                .also(|v| v.extend_from_slice(boundary))
+                .into();
 
+            Box::pin(async move {
                 let mut pat_idx = 0;
+                let mut bytes_idx = 0;
+                let mut prev_block = None;
                 let mut push_bytes = |mut bytes: Bytes| {
                     if pat_idx > 0 {
                         let suffix = crlf_pat.get(pat_idx..).unwrap_or_else(|| unreachable!());
                         if bytes.starts_with(suffix) {
+                            if let Some(block) = prev_block.take() {
+                                y.yield_one(block)
+                            }
                             return None;
                         } else {
                             pat_idx = 0;
@@ -268,14 +272,18 @@ impl FileStream {
                             }
                         } else if crlf_pat.starts_with(remaining) {
                             pat_idx = remaining.len();
+                            bytes_idx = idx;
                         } else {
                             continue;
                         }
                     }
-                    y.yield_one(bytes);
+                    if pat_idx > 0 {
+                        prev_block = Some(bytes.slice(..bytes_idx));
+                    } else {
+                        y.yield_one(bytes);
+                    }
                     Some(())
                 };
-
                 if push_bytes(prev_bytes).is_some() {
                     loop {
                         let bytes = match body.as_mut().next().await {
@@ -324,7 +332,6 @@ impl<'a> CrlfLines<'a> {
             if idx == 0 {
                 continue;
             }
-
             let byte = *self
                 .slice
                 .get(idx.wrapping_sub(1))
@@ -344,8 +351,11 @@ impl<'a> CrlfLines<'a> {
                 return Some(left);
             }
         }
-
-        Some(mem::replace(&mut self.slice, &[]))
+        if self.slice.is_empty() {
+            None
+        } else {
+            Some(mem::replace(&mut self.slice, &[]))
+        }
     }
 
     /// split by pattern and return previous bytes
@@ -408,7 +418,17 @@ fn parse_content_disposition(input: &[u8]) -> nom::IResult<&[u8], ContentDisposi
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::stream::TryStreamExt;
+    use bytes::BytesMut;
+
+    async fn aggregate_file_stream(mut file_stream: FileStream) -> Result<Bytes, FileStreamError> {
+        let mut buf = BytesMut::new();
+
+        while let Some(bytes) = file_stream.next().await {
+            buf.extend(bytes?)
+        }
+
+        Ok(buf.freeze())
+    }
 
     #[test]
     fn content_disposition() {
@@ -432,6 +452,9 @@ mod tests {
         let mut lines = CrlfLines { slice: bytes };
         assert_eq!(lines.split_to(b"----"), Some(b"\r\n".as_ref()));
         assert_eq!(lines.slice, b"asd\r\nqwe");
+
+        let mut lines = CrlfLines { slice: bytes };
+        assert_eq!(lines.split_to(b"xxx"), None);
     }
 
     #[tokio::test]
@@ -508,17 +531,102 @@ mod tests {
         assert_eq!(ans.file.name, filename);
         assert_eq!(ans.file.content_type, content_type);
 
-        let file_bytes = ans
-            .file
-            .stream
-            .try_fold(Vec::new(), |buf, bytes| async move {
-                buf.also(|v| v.extend_from_slice(&bytes)).apply(Ok)
-            })
+        let file_bytes = aggregate_file_stream(ans.file.stream).await.unwrap();
+
+        assert_eq!(file_bytes, file_content);
+    }
+
+    #[tokio::test]
+    async fn post_object() {
+        let bytes:&[&[u8]] = &[
+            b"--------------------------c634190ccaebbc34\r\nContent-Disposition: form-data; name=\"x-amz-sig",
+            b"nature\"\r\n\r\na71d6dfaaa5aa018dc8e3945f2cec30ea1939ff7ed2f2dd65a6d49320c8fa1e6\r\n----------",
+            b"----------------c634190ccaebbc34\r\nContent-Disposition: form-data; name=\"bucket\"\r\n\r\nmc-te",
+            b"st-bucket-32569\r\n--------------------------c634190ccaebbc34\r\nContent-Disposition: form-data; na",
+            b"me=\"policy\"\r\n\r\neyJleHBpcmF0aW9uIjoiMjAyMC0xMC0wM1QxMzoyNTo0Ny4yMThaIiwiY29uZGl0aW9ucyI6W1siZ",
+            b"XEiLCIkYnVja2V0IiwibWMtdGVzdC1idWNrZXQtMzI1NjkiXSxbImVxIiwiJGtleSIsIm1jLXRlc3Qtb2JqZWN0LTc2NTgiXSxb",
+            b"ImVxIiwiJHgtYW16LWRhdGUiLCIyMDIwMDkyNlQxMzI1NDdaIl0sWyJlcSIsIiR4LWFtei1hbGdvcml0aG0iLCJBV1M0LUhNQUMt",
+            b"U0hBMjU2Il0sWyJlcSIsIiR4LWFtei1jcmVkZW50aWFsIiwiQUtJQUlPU0ZPRE5ON0VYQU1QTEUvMjAyMDA5MjYvdXMtZWFzdC0x",
+            b"L3MzL2F3czRfcmVxdWVzdCJdXX0=\r\n--------------------------c634190ccaebbc34\r\nContent-Disposition: form-",
+            b"data; name=\"x-amz-algorithm\"\r\n\r\nAWS4-HMAC-SHA256\r\n--------------------------c634190ccaebbc34\r",
+            b"\nContent-Disposition: form-data; name=\"x-amz-credential\"\r\n\r\nAKIAIOSFODNN7EXAMPLE/20200926/us-east-1/",
+            b"s3/aws4_request\r\n--------------------------c634190ccaebbc34\r\nContent-Disposition: form-data; nam",
+            b"e=\"x-amz-date\"\r\n\r\n20200926T132547Z\r\n--------------------------c634190ccaebbc34\r\nContent-Dispos",
+            b"ition: form-data; name=\"key\"\r\n\r\nmc-test-object-7658\r\n--------------------------c634190ccae",
+            b"bbc34\r\nContent-Disposition: form-data; name=\"file\"; filename=\"datafile-1-MB\"\r\nContent-Type: app",
+            b"lication/octet-stream\r\n\r\nNxjFYaL4HJsJsSy/d3V7F+s1DfU+AdMw9Ze0GbhIXYn9OCvtkz4/mRdf0/V2gdgc4vuXzWUlVHag",
+            b"\npSI7q6mw4aXom0gunpMMUS0cEJgSoqB/yt4roLl2icdCnUPHhiO0SBh1VkBxSz5CwWlN/mmLfu5l\nAkD8fVoMTT/+kVSJzw7ykO48",
+            b"7xLh6JOEfPaceUV30ASxGvkZkM0QEW5pWR1Lpwst6adXwxQiP2P8Pp0fpe\niA6bh6mXxH3BPeQhL9Ub44HdS2LlcUwpVjvcbvzGC31t",
+            b"VIIABAshhx2VAcB1+QrvgCeT75IJGOWa\n3gNDHTPOEp/TBls2d7axY+zvCW9x4NBboKX25D1kBfAb90GaePbg/S5k5LvxJsr7vkCnU",
+            b"4Iq85RV\n4uskvQ5CLZTtWQKJq6WDlZJWnVuA1qQqFVFWs/p02teDX/XOQpgW1I9trzHjOF8+AjI\r\n---------------------",
+            b"-----c634190ccaebbc34--\r\n",
+        ];
+
+        let body_bytes: Vec<io::Result<Bytes>> = {
+            bytes
+                .iter()
+                .copied()
+                .map(Bytes::copy_from_slice)
+                .map(Ok)
+                .collect()
+        };
+        let body_stream = futures::stream::iter(body_bytes);
+        let boundary = "------------------------c634190ccaebbc34";
+
+        let ans = transform_multipart(body_stream, boundary.as_bytes())
             .await
-            .unwrap()
-            .apply(String::from_utf8)
             .unwrap();
 
+        let fields = [
+            (
+                "x-amz-signature",
+                "a71d6dfaaa5aa018dc8e3945f2cec30ea1939ff7ed2f2dd65a6d49320c8fa1e6",
+            ),
+            (
+                "bucket",
+                "mc-test-bucket-32569",
+            ),
+            (
+                "policy",
+                "eyJleHBpcmF0aW9uIjoiMjAyMC0xMC0wM1QxMzoyNTo0Ny4yMThaIiwiY29uZGl0aW9ucyI6W1siZXEiLCIkYnVja2V0IiwibWMtdGVzdC1idWNrZXQtMzI1NjkiXSxbImVxIiwiJGtleSIsIm1jLXRlc3Qtb2JqZWN0LTc2NTgiXSxbImVxIiwiJHgtYW16LWRhdGUiLCIyMDIwMDkyNlQxMzI1NDdaIl0sWyJlcSIsIiR4LWFtei1hbGdvcml0aG0iLCJBV1M0LUhNQUMtU0hBMjU2Il0sWyJlcSIsIiR4LWFtei1jcmVkZW50aWFsIiwiQUtJQUlPU0ZPRE5ON0VYQU1QTEUvMjAyMDA5MjYvdXMtZWFzdC0xL3MzL2F3czRfcmVxdWVzdCJdXX0=",
+            ),
+            (
+                "x-amz-algorithm",
+                "AWS4-HMAC-SHA256",
+            ),
+            (
+                "x-amz-credential",
+                "AKIAIOSFODNN7EXAMPLE/20200926/us-east-1/s3/aws4_request",
+            ),
+            (
+                "x-amz-date",
+                "20200926T132547Z",
+            ),
+            (
+                "key",
+                "mc-test-object-7658",
+            ),
+        ];
+        let file_name = "datafile-1-MB";
+        let content_type = "application/octet-stream";
+
+        for (lhs, rhs) in ans.fields.iter().zip(fields.iter()) {
+            assert_eq!(lhs.0, rhs.0);
+            assert_eq!(lhs.1, rhs.1);
+        }
+
+        assert_eq!(ans.file.name, file_name);
+        assert_eq!(ans.file.content_type, content_type);
+
+        let file_content = concat!(
+            "NxjFYaL4HJsJsSy/d3V7F+s1DfU+AdMw9Ze0GbhIXYn9OCvtkz4/mRdf0/V2gdgc4vuXzWUlVHag",
+            "\npSI7q6mw4aXom0gunpMMUS0cEJgSoqB/yt4roLl2icdCnUPHhiO0SBh1VkBxSz5CwWlN/mmLfu5l\nAkD8fVoMTT/+kVSJzw7ykO48",
+            "7xLh6JOEfPaceUV30ASxGvkZkM0QEW5pWR1Lpwst6adXwxQiP2P8Pp0fpe\niA6bh6mXxH3BPeQhL9Ub44HdS2LlcUwpVjvcbvzGC31t",
+            "VIIABAshhx2VAcB1+QrvgCeT75IJGOWa\n3gNDHTPOEp/TBls2d7axY+zvCW9x4NBboKX25D1kBfAb90GaePbg/S5k5LvxJsr7vkCnU",
+            "4Iq85RV\n4uskvQ5CLZTtWQKJq6WDlZJWnVuA1qQqFVFWs/p02teDX/XOQpgW1I9trzHjOF8+AjI",
+        );
+
+        let file_bytes = aggregate_file_stream(ans.file.stream).await.unwrap();
         assert_eq!(file_bytes, file_content);
     }
 }

@@ -29,7 +29,7 @@ pub mod names {
             #[test]
             fn check_headers(){
                 $(
-                    dbg!(&*$n);
+                    assert_eq!($n.as_str(), $s);
                 )+
             }
         }

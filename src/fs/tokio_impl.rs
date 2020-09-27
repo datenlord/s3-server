@@ -36,6 +36,7 @@ use std::{
 use async_trait::async_trait;
 use path_absolutize::Absolutize;
 
+use log::{debug, error};
 use tokio::{fs::File, stream::StreamExt};
 
 /// A S3 storage implementation based on file system
@@ -241,7 +242,7 @@ impl S3Storage for FileSystem {
             let file = match File::open(&path).await {
                 Ok(file) => file,
                 Err(e) => {
-                    log::error!("{}", e);
+                    error!("{}", e);
                     return Ok(Err(GetObjectError::NoSuchKey(
                         "The specified key does not exist.".into(),
                     )));
@@ -404,8 +405,6 @@ impl S3Storage for FileSystem {
         &self,
         input: ListObjectsV2Request,
     ) -> S3Result<ListObjectsV2Output, ListObjectsV2Error> {
-        dbg!(&input);
-
         wrap_storage(async move {
             let path = self.get_bucket_path(&input.bucket)?;
 
@@ -476,7 +475,16 @@ impl S3Storage for FileSystem {
                 let mut reader = tokio::io::stream_reader(body);
                 let file = File::create(&path).await?;
                 let mut writer = tokio::io::BufWriter::new(file);
-                let _ = tokio::io::copy(&mut reader, &mut writer).await?;
+
+                let (ret, duration) =
+                    time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
+                let size = ret?;
+                debug!(
+                    "PutObject: write file: path = {}, size = {}, duration = {:?}",
+                    path.display(),
+                    size,
+                    duration
+                );
             }
 
             let output = PutObjectOutput::default(); // TODO: handle other fields

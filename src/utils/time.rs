@@ -2,8 +2,11 @@
 
 use super::Apply;
 
+use std::future::Future;
+use std::time::{Duration, Instant, SystemTime};
+
 use chrono::{DateTime, Local, Utc};
-use std::time::SystemTime;
+use futures::FutureExt;
 
 /// See <https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Last-Modified>
 ///
@@ -27,4 +30,17 @@ pub fn map_opt_rfc3339_to_last_modified(
     s: Option<String>,
 ) -> Result<Option<String>, chrono::ParseError> {
     s.map(|ref s| rfc3339_to_last_modified(s)).transpose()
+}
+
+/// Returns the output of a future and elapsed time
+#[allow(clippy::future_not_send)]
+pub fn count_duration<F>(f: F) -> impl Future<Output = (F::Output, Duration)>
+where
+    F: Future,
+{
+    let t0 = Instant::now();
+    f.map(move |ans| {
+        let dur = t0.elapsed();
+        (ans, dur)
+    })
 }

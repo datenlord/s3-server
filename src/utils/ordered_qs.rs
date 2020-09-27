@@ -1,7 +1,5 @@
 //! Ordered query strings
 
-#![allow(dead_code)]
-
 use crate::utils::{Also, Apply};
 
 use smallvec::SmallVec;
