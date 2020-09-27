@@ -85,6 +85,6 @@ where
 
 impl<T, E, G> Debug for AsyncTryStream<T, E, G> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "AsyncTryStream{{...}}")
+        write!(f, "AsyncTryStream {{...}}")
     }
 }

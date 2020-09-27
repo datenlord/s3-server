@@ -37,9 +37,7 @@ use hyper::{
     header::{AsHeaderName, AUTHORIZATION, CONTENT_TYPE},
     Body, Method,
 };
-
-use futures::{future::BoxFuture, stream::StreamExt, Stream};
-
+use futures::{future::BoxFuture,Stream,StreamExt};
 use log::{debug, error};
 use mime::Mime;
 use multipart::Multipart;
@@ -254,15 +252,12 @@ impl S3Service {
         }
     }
 
-    /// Constructs a S3 service with an authentication provider
-    pub fn with_auth(
-        storage: impl S3Storage + Send + Sync + 'static,
-        auth: impl S3Auth + Send + Sync + 'static,
-    ) -> Self {
-        Self {
-            storage: Box::new(storage),
-            auth: Some(Box::new(auth)),
-        }
+    /// Set the authentication provider
+    pub fn set_auth<A>(&mut self, auth: A)
+    where
+        A: S3Auth + Send + Sync + 'static,
+    {
+        self.auth = Some(Box::new(auth));
     }
 
     /// Converts `S3Service` to `SharedS3Service`
@@ -324,7 +319,7 @@ impl S3Service {
                     S3ErrorCode::InvalidBucketName,
                     "The specified bucket is not valid.",
                 ),
-                S3PathErrorKind::TooLongKey => {
+                S3PathErrorKind::KeyTooLong => {
                     (S3ErrorCode::KeyTooLongError, "Your key is too long.")
                 }
             }

@@ -29,6 +29,7 @@ use std::{
     collections::VecDeque,
     convert::TryInto,
     env,
+    fmt::{self, Debug},
     future::Future,
     io,
     path::{Path, PathBuf},
@@ -45,6 +46,17 @@ use tokio::{fs::File, stream::StreamExt};
 pub struct FileSystem {
     /// root path
     root: PathBuf,
+
+    /// validators
+    validators: Validators,
+}
+
+/// validators
+
+#[derive(Default)]
+struct Validators {
+    /// storage class validator
+    storage_class: Option<Box<dyn Fn(&str) -> bool + Send + Sync + 'static>>,
 }
 
 impl FileSystem {
@@ -52,9 +64,17 @@ impl FileSystem {
     /// # Errors
     /// Returns an `Err` if current working directory is invalid or `root` doesn't exist
     pub fn new(root: impl AsRef<Path>) -> io::Result<Self> {
-        let cwd = env::current_dir()?;
-        let root = cwd.join(root).canonicalize()?;
-        Ok(Self { root })
+        let root = env::current_dir()?.join(root).canonicalize()?;
+        let validators = Validators::default();
+        Ok(Self { root, validators })
+    }
+
+    /// Set a validator for x-amz-storage-class
+    pub fn set_storage_class_validator<F>(&mut self, f: F)
+    where
+        F: Fn(&str) -> bool + Send + Sync + 'static,
+    {
+        self.validators.storage_class = Some(Box::new(f));
     }
 
     /// resolve object path under the virtual root
@@ -115,6 +135,21 @@ impl FileSystem {
         let content = serde_json::to_vec(metadata)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         tokio::fs::write(&path, &content).await
+    }
+}
+
+impl Validators {
+    /// validate storage class
+    fn validate_storage_class(&self, storage_class: &str) -> bool {
+        self.storage_class
+            .as_ref()
+            .map_or(true, |f| f(storage_class))
+    }
+}
+
+impl Debug for Validators {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Validators {{...}}")
     }
 }
 
@@ -525,6 +560,15 @@ impl S3Storage for FileSystem {
         &self,
         input: PutObjectRequest,
     ) -> S3Result<PutObjectOutput, PutObjectError> {
+        if let Some(ref storage_class) = input.storage_class {
+            if !self.validators.validate_storage_class(storage_class) {
+                return Err(S3Error::Other(XmlErrorResponse::from_code_msg(
+                    S3ErrorCode::InvalidStorageClass,
+                    "The storage class you specified is not valid.".into(),
+                )));
+            }
+        }
+
         wrap_storage(async move {
             let path = self.get_object_path(&input.bucket, &input.key)?;
 

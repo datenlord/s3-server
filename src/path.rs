@@ -49,7 +49,7 @@ pub enum S3PathErrorKind {
     /// The bucket name is invalid
     InvalidBucketName,
     /// The object key is too long
-    TooLongKey,
+    KeyTooLong,
 }
 
 /// See [bucket nameing rules](https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules)
@@ -144,7 +144,7 @@ impl<'a> S3Path<'a> {
 
         if !check_key(key) {
             return Err(ParseS3PathError {
-                kind: S3PathErrorKind::TooLongKey,
+                kind: S3PathErrorKind::KeyTooLong,
             });
         }
 
@@ -202,7 +202,7 @@ mod tests {
 
         assert_eq!(
             S3Path::try_from_path(&too_long_path).unwrap_err().kind(),
-            &S3PathErrorKind::TooLongKey
+            &S3PathErrorKind::KeyTooLong
         );
     }
 }

@@ -19,12 +19,14 @@
 use s3_server::S3Service;
 use s3_server::{fs::TokioFileSystem as FileSystem, SimpleAuth};
 
+use std::net::TcpListener;
+use std::path::PathBuf;
+
 use anyhow::Result;
 use futures::future;
 use hyper::server::Server;
 use hyper::service::make_service_fn;
-use std::net::TcpListener;
-use std::path::PathBuf;
+use log::{debug, info};
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -49,29 +51,31 @@ async fn main() -> Result<()> {
 
     let args: Args = Args::from_args();
 
-    let fs = FileSystem::new(&args.fs_root)?;
-    log::debug!("fs: {:?}", &fs);
+    // setup the storage
+    let mut fs = FileSystem::new(&args.fs_root)?;
+    fs.set_storage_class_validator(|s| ["STANDARD", "REDUCED_REDUNDANCY"].contains(&s));
 
-    let service = match (args.access_key, args.secret_key) {
-        (None, None) => S3Service::new(fs),
-        (Some(access_key), Some(secret_key)) => {
-            let mut auth = SimpleAuth::new();
-            auth.register(access_key, secret_key);
-            log::debug!("auth: {:?}", &auth);
-            S3Service::with_auth(fs, auth)
-        }
-        _ => unreachable!(),
+    debug!("fs: {:?}", &fs);
+
+    // setup the service
+    let mut service = S3Service::new(fs);
+
+    if let (Some(access_key), Some(secret_key)) = (args.access_key, args.secret_key) {
+        let mut auth = SimpleAuth::new();
+        auth.register(access_key, secret_key);
+        debug!("auth: {:?}", &auth);
+        service.set_auth(auth);
     }
-    .into_shared();
 
     let server = {
+        let service = service.into_shared();
         let listener = TcpListener::bind((args.host.as_str(), args.port))?;
         let make_service: _ =
             make_service_fn(move |_| future::ready(Ok::<_, anyhow::Error>(service.clone())));
         Server::from_tcp(listener)?.serve(make_service)
     };
 
-    log::info!("server is running at http://{}:{}/", args.host, args.port);
+    info!("server is running at http://{}:{}/", args.host, args.port);
     server.await?;
 
     Ok(())
