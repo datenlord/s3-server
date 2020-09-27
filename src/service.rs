@@ -19,7 +19,7 @@ use crate::{
     storage::S3Storage,
     utils::Also,
     utils::OrderedHeaders,
-    utils::{crypto, Apply, OrderedQs, RequestExt},
+    utils::{crypto, time, Apply, OrderedQs, RequestExt},
     BoxStdError, Request, Response, S3ErrorCode,
 };
 
@@ -110,20 +110,24 @@ fn wrap_handle_sync<T>(f: impl FnOnce() -> Result<T, BoxStdError>) -> S3Result<T
 }
 
 macro_rules! call_s3_operation{
+    (@debug $op:ident)=>{
+        debug!("call_s3_operation at {}:{}: {}", file!(), line!(), stringify!($op));
+    };
+
     ($op:ident with () by $storage:expr)  => {{
-        debug!("call_s3_operation: {}", stringify!($op));
+        call_s3_operation!(@debug $op);
         let input = wrap_handle_sync(ops::$op::extract)?;
         $storage.$op(input).await.try_into_response()
     }};
 
     ($op:ident with ($($arg:expr),+) by $storage:expr)  => {{
-        debug!("call_s3_operation: {}", stringify!($op));
+        call_s3_operation!(@debug $op);
         let input = wrap_handle_sync(||ops::$op::extract($($arg),+))?;
         $storage.$op(input).await.try_into_response()
     }};
 
     ($op:ident with async ($($arg:expr),*) by $storage:expr)  => {{
-        debug!("call_s3_operation: {}", stringify!($op));
+        call_s3_operation!(@debug $op);
         let input = wrap_handle(ops::$op::extract($($arg),*)).await?;
         $storage.$op(input).await.try_into_response()
     }};
@@ -277,7 +281,9 @@ impl S3Service {
         let uri = req.uri().clone();
         debug!("{} \"{:?}\" request:\n{:#?}", method, uri, req);
 
-        let result = self.handle(req).await.or_else(|err| {
+        let (result, duration) = time::count_duration(self.handle(req)).await;
+
+        let result = result.or_else(|err| {
             if let S3Error::Other(e) = err {
                 e.try_into_response()
             } else {
@@ -287,17 +293,22 @@ impl S3Service {
 
         match result {
             Ok(resp) => {
-                debug!("{} \"{:?}\" => response:\n{:#?}", method, uri, resp);
-                Ok(resp)
+                debug!(
+                    "{} \"{:?}\" => duration: {:?}, response:\n{:#?}",
+                    method, uri, duration, resp
+                );
+                resp
             }
             Err(err) => {
-                error!("{} \"{:?}\" => error:\n{:#?}", method, uri, err);
-                let resp =
-                    XmlErrorResponse::from_code_msg(S3ErrorCode::InternalError, err.to_string())
-                        .try_into_response()?;
-                Ok(resp)
+                error!(
+                    "{} \"{:?}\" => duration: {:?}, error:\n{:#?}",
+                    method, uri, duration, err
+                );
+                XmlErrorResponse::from_code_msg(S3ErrorCode::InternalError, err.to_string())
+                    .try_into_response()?
             }
         }
+        .apply(Ok)
     }
 
     /// handle request
