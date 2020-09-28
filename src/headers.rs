@@ -173,5 +173,11 @@ pub mod names {
 
         /// x-amz-content-sha256
         X_AMZ_CONTENT_SHA256: "x-amz-content-sha256",
+
+        /// x-amz-abort-date
+        X_AMZ_ABORT_DATE: "x-amz-abort-date",
+
+        /// x-amz-abort-rule-id
+        X_AMZ_ABORT_RULE_ID: "x-amz-abort-rule-id",
     ];
 }

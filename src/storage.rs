@@ -1,15 +1,18 @@
 //! Trait representing the capabilities of the Amazon S3 API at server side
 
 use crate::dto::{
+    CompleteMultipartUploadError, CompleteMultipartUploadOutput, CompleteMultipartUploadRequest,
     CopyObjectError, CopyObjectOutput, CopyObjectRequest, CreateBucketError, CreateBucketOutput,
-    CreateBucketRequest, DeleteBucketError, DeleteBucketOutput, DeleteBucketRequest,
+    CreateBucketRequest, CreateMultipartUploadError, CreateMultipartUploadOutput,
+    CreateMultipartUploadRequest, DeleteBucketError, DeleteBucketOutput, DeleteBucketRequest,
     DeleteObjectError, DeleteObjectOutput, DeleteObjectRequest, DeleteObjectsError,
     DeleteObjectsOutput, DeleteObjectsRequest, GetBucketLocationError, GetBucketLocationOutput,
     GetBucketLocationRequest, GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError,
     HeadBucketOutput, HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest,
     ListBucketsError, ListBucketsOutput, ListBucketsRequest, ListObjectsError, ListObjectsOutput,
     ListObjectsRequest, ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request,
-    PutObjectError, PutObjectOutput, PutObjectRequest,
+    PutObjectError, PutObjectOutput, PutObjectRequest, UploadPartError, UploadPartOutput,
+    UploadPartRequest,
 };
 use crate::error::S3Result;
 
@@ -18,17 +21,29 @@ use async_trait::async_trait;
 /// Trait representing the capabilities of the Amazon S3 API at server side
 #[async_trait]
 pub trait S3Storage {
-    /// [CreateBucket](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html)
-    async fn create_bucket(
+    /// [CompleteMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html)
+    async fn complete_multipart_upload(
         &self,
-        input: CreateBucketRequest,
-    ) -> S3Result<CreateBucketOutput, CreateBucketError>;
+        input: CompleteMultipartUploadRequest,
+    ) -> S3Result<CompleteMultipartUploadOutput, CompleteMultipartUploadError>;
 
     /// [CopyObject](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CopyObject.html)
     async fn copy_object(
         &self,
         input: CopyObjectRequest,
     ) -> S3Result<CopyObjectOutput, CopyObjectError>;
+
+    /// [CreateMultipartUpload](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html)
+    async fn create_multipart_upload(
+        &self,
+        input: CreateMultipartUploadRequest,
+    ) -> S3Result<CreateMultipartUploadOutput, CreateMultipartUploadError>;
+
+    /// [CreateBucket](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateBucket.html)
+    async fn create_bucket(
+        &self,
+        input: CreateBucketRequest,
+    ) -> S3Result<CreateBucketOutput, CreateBucketError>;
 
     /// [DeleteBucket](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteBucket.html)
     async fn delete_bucket(
@@ -95,4 +110,10 @@ pub trait S3Storage {
         &self,
         input: PutObjectRequest,
     ) -> S3Result<PutObjectOutput, PutObjectError>;
+
+    /// [UploadPart](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html)
+    async fn upload_part(
+        &self,
+        input: UploadPartRequest,
+    ) -> S3Result<UploadPartOutput, UploadPartError>;
 }

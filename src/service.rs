@@ -15,6 +15,7 @@ use crate::{
     path::{self, S3PathErrorKind},
     query::GetQuery,
     query::PostQuery,
+    query::PutQuery,
     signature_v4::{self, Payload},
     storage::S3Storage,
     utils::Also,
@@ -33,11 +34,11 @@ use std::{
 };
 
 use bytes::Bytes;
+use futures::{future::BoxFuture, Stream, StreamExt};
 use hyper::{
     header::{AsHeaderName, AUTHORIZATION, CONTENT_TYPE},
     Body, Method,
 };
-use futures::{future::BoxFuture,Stream,StreamExt};
 use log::{debug, error};
 use mime::Mime;
 use multipart::Multipart;
@@ -725,7 +726,19 @@ impl S3Service {
                     ));
                 }
 
-                let _ = (bucket, key); // TODO: remove this place holder
+                let query = match extract_query::<PostQuery>(req)? {
+                    None => return Err(not_supported!()),
+                    Some(query) => query,
+                };
+
+                if query.uploads.is_some() {
+                    return call_s3_operation!(create_multipart_upload with (req, bucket, key) by self.storage);
+                }
+
+                if let Some(upload_id) = query.upload_id {
+                    return call_s3_operation!(complete_multipart_upload with async (req,body,bucket,key,upload_id) by self.storage);
+                }
+
                 Err(not_supported!()) // TODO: impl handler
             }
         }
@@ -751,7 +764,18 @@ impl S3Service {
                 if let Some(copy_source) = extract_header(req, &*X_AMZ_COPY_SOURCE)? {
                     return call_s3_operation!(copy_object with (req, bucket,key,copy_source) by self.storage);
                 }
-                call_s3_operation!(put_object with (req,body,bucket,key,multipart,&headers) by self.storage)
+                let query = match extract_query::<PutQuery>(req)? {
+                    None => {
+                        return call_s3_operation!(put_object with (req,body,bucket,key,multipart,&headers) by self.storage)
+                    }
+                    Some(query) => query,
+                };
+                if let Some(part_number) = query.part_number {
+                    if let Some(upload_id) = query.upload_id {
+                        return call_s3_operation!(upload_part with (req,bucket, key,part_number,upload_id,body) by self.storage);
+                    }
+                }
+                Err(not_supported!())
             }
         }
     }

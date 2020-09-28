@@ -30,8 +30,26 @@ pub struct GetQuery {
 
 /// Url query of a POST S3 request
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
 pub struct PostQuery {
     /// delete
     pub delete: Option<String>,
+
+    /// uploads
+    pub uploads: Option<String>,
+
+    /// uploadId
+    #[serde(rename = "uploadId")]
+    pub upload_id: Option<String>,
+}
+
+/// Url query of a PUT S3 request
+#[derive(Debug, Deserialize)]
+pub struct PutQuery {
+    /// partNumber
+    #[serde(rename = "partNumber")]
+    pub part_number: Option<i64>,
+
+    /// uploadId
+    #[serde(rename = "uploadId")]
+    pub upload_id: Option<String>,
 }

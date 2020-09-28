@@ -2,26 +2,25 @@
 
 use crate::{
     dto::{
-        Bucket, CopyObjectError, CopyObjectOutput, CopyObjectRequest, CopyObjectResult,
-        CreateBucketError, CreateBucketOutput, CreateBucketRequest, DeleteBucketError,
-        DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError, DeleteObjectOutput,
-        DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput, DeleteObjectsRequest,
-        DeletedObject, GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest,
-        GetObjectError, GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketOutput,
-        HeadBucketRequest, HeadObjectError, HeadObjectOutput, HeadObjectRequest, ListBucketsError,
-        ListBucketsOutput, ListBucketsRequest, ListObjectsError, ListObjectsOutput,
-        ListObjectsRequest, ListObjectsV2Error, ListObjectsV2Output, ListObjectsV2Request, Object,
-        PutObjectError, PutObjectOutput, PutObjectRequest,
+        Bucket, CompleteMultipartUploadError, CompleteMultipartUploadOutput,
+        CompleteMultipartUploadRequest, CopyObjectError, CopyObjectOutput, CopyObjectRequest,
+        CopyObjectResult, CreateBucketError, CreateBucketOutput, CreateBucketRequest,
+        CreateMultipartUploadError, CreateMultipartUploadOutput, CreateMultipartUploadRequest,
+        DeleteBucketError, DeleteBucketOutput, DeleteBucketRequest, DeleteObjectError,
+        DeleteObjectOutput, DeleteObjectRequest, DeleteObjectsError, DeleteObjectsOutput,
+        DeleteObjectsRequest, DeletedObject, GetBucketLocationError, GetBucketLocationOutput,
+        GetBucketLocationRequest, GetObjectError, GetObjectOutput, GetObjectRequest,
+        HeadBucketError, HeadBucketOutput, HeadBucketRequest, HeadObjectError, HeadObjectOutput,
+        HeadObjectRequest, ListBucketsError, ListBucketsOutput, ListBucketsRequest,
+        ListObjectsError, ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error,
+        ListObjectsV2Output, ListObjectsV2Request, Object, PutObjectError, PutObjectOutput,
+        PutObjectRequest, UploadPartError, UploadPartOutput, UploadPartRequest,
     },
-    S3ErrorCode, XmlErrorResponse,
-};
-
-use crate::{
     error::{S3Error, S3Result},
     path::check_bucket_name,
     storage::S3Storage,
     utils::{time, Apply, ByteStream},
-    BoxStdError,
+    BoxStdError, S3ErrorCode, XmlErrorResponse,
 };
 
 use std::{
@@ -37,11 +36,11 @@ use std::{
 
 use async_trait::async_trait;
 use futures::TryStreamExt;
+use log::{debug, error};
 use md5::{Digest, Md5};
 use path_absolutize::Absolutize;
-
-use log::{debug, error};
-use tokio::{fs::File, stream::StreamExt};
+use tokio::{fs::File, io::AsyncReadExt, stream::StreamExt};
+use uuid::Uuid;
 
 /// A S3 storage implementation based on file system
 #[derive(Debug)]
@@ -621,6 +620,167 @@ impl S3Storage for FileSystem {
             let mut output = PutObjectOutput::default(); // TODO: handle other fields
             output.e_tag = Some(format!("\"{}\"", md5_sum));
 
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn create_multipart_upload(
+        &self,
+        input: CreateMultipartUploadRequest,
+    ) -> S3Result<CreateMultipartUploadOutput, CreateMultipartUploadError> {
+        let upload_id = Uuid::new_v4().to_string();
+
+        let output = CreateMultipartUploadOutput {
+            bucket: Some(input.bucket),
+            key: Some(input.key),
+            upload_id: Some(upload_id),
+            ..CreateMultipartUploadOutput::default()
+        };
+
+        Ok(output)
+    }
+
+    async fn upload_part(
+        &self,
+        input: UploadPartRequest,
+    ) -> S3Result<UploadPartOutput, UploadPartError> {
+        let UploadPartRequest {
+            body,
+            upload_id,
+            part_number,
+            ..
+        } = input;
+
+        let body = body.ok_or_else(||{
+            S3Error::Other(
+                XmlErrorResponse::from_code_msg(
+                S3ErrorCode::IncompleteBody,
+                "You did not provide the number of bytes specified by the Content-Length HTTP header.".into(),))})?;
+
+        wrap_storage(async {
+            let file_path_str = format!(".upload_id-{}.part-{}", upload_id, part_number);
+            let file_path = Path::new(&file_path_str).absolutize_virtually(&self.root)?;
+
+            let mut md5_hash = Md5::new();
+            let body = body.map_ok(|bytes| {
+                md5_hash.update(&bytes);
+                bytes
+            });
+
+            let file = File::create(&file_path).await?;
+            let mut reader = tokio::io::stream_reader(body);
+            let mut writer = tokio::io::BufWriter::new(file);
+
+            let (ret, duration) =
+                time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
+            let size = ret?;
+            debug!(
+                "UploadPart: write file: path = {}, size = {}, duration = {:?}",
+                file_path.display(),
+                size,
+                duration
+            );
+
+            let md5_sum = md5_hash
+                .finalize()
+                .apply(|a| faster_hex::hex_string(&a))
+                .unwrap_or_else(|_| unreachable!());
+            let e_tag = format!("\"{}\"", md5_sum);
+
+            let mut output = UploadPartOutput::default();
+            output.e_tag = Some(e_tag);
+
+            Ok(Ok(output))
+        })
+        .await
+    }
+
+    async fn complete_multipart_upload(
+        &self,
+        input: CompleteMultipartUploadRequest,
+    ) -> S3Result<CompleteMultipartUploadOutput, CompleteMultipartUploadError> {
+        let CompleteMultipartUploadRequest {
+            multipart_upload,
+            bucket,
+            key,
+            upload_id,
+            ..
+        } = input;
+
+        let multipart_upload = if let Some(multipart_upload) = multipart_upload {
+            multipart_upload
+        } else {
+            return Err(S3Error::Other(XmlErrorResponse::from_code_msg(
+                S3ErrorCode::InvalidPart,
+                "Missing multipart_upload".into(),
+            )));
+        };
+
+        wrap_storage(async {
+            let object_path = self.get_object_path(&bucket, &key)?;
+            let file = File::create(&object_path).await?;
+            let mut writer = tokio::io::BufWriter::new(file);
+
+            let mut cnt: i64 = 0;
+            for part in multipart_upload.parts.into_iter().flatten() {
+                let part_number = part.part_number.ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::NotFound, "Missing part_number")
+                })?;
+                cnt = cnt.wrapping_add(1);
+                if part_number != cnt {
+                    return Err(io::Error::new(io::ErrorKind::Other, "InvalidPartOrder").into());
+                }
+                let part_path_str = format!(".upload_id-{}.part-{}", upload_id, part_number);
+                let part_path = Path::new(&part_path_str).absolutize_virtually(&self.root)?;
+                let mut reader = tokio::io::BufReader::new(File::open(&part_path).await?);
+                let (ret, duration) =
+                    time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
+                let size = ret?;
+                debug!(
+                    "CompleteMultipartUpload: write file from {} to {}, size = {}, duration = {:?}",
+                    part_path.display(),
+                    object_path.display(),
+                    size,
+                    duration
+                );
+                tokio::fs::remove_file(&part_path).await?;
+            }
+            drop(writer);
+
+            let mut file = File::open(&object_path).await?;
+            let file_size = file.metadata().await?.len();
+
+            let (md5_sum, duration) = time::count_duration(async {
+                let mut buf = vec![0; 4_usize.wrapping_mul(1024).wrapping_mul(1024)];
+                let mut md5_hash = Md5::new();
+                while let Ok(nread) = file.read(&mut buf).await {
+                    if nread == 0{
+                        break
+                    }
+                    md5_hash.update(buf.get(..nread).unwrap_or_else(|| unreachable!()));
+                }
+                md5_hash
+                    .finalize()
+                    .apply(|a| faster_hex::hex_string(&a))
+                    .unwrap_or_else(|_| unreachable!())
+            })
+            .await;
+
+            debug!("CompleteMultipartUpload: calculate md5 sum: sum = {}, path = {}, size = {}, duration = {:?}",
+                md5_sum,
+                object_path.display(),
+                file_size,
+                duration
+            );
+
+            let e_tag = format!("\"{}\"", md5_sum);
+            let output = CompleteMultipartUploadOutput {
+                bucket: Some(bucket),
+                key: Some(key),
+                e_tag: Some(e_tag),
+                ..CompleteMultipartUploadOutput::default()
+            };
             Ok(Ok(output))
         })
         .await
