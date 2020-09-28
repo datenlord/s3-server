@@ -33,10 +33,9 @@ pub fn map_opt_rfc3339_to_last_modified(
 }
 
 /// Returns the output of a future and elapsed time
-#[allow(clippy::future_not_send)]
-pub fn count_duration<F>(f: F) -> impl Future<Output = (F::Output, Duration)>
+pub fn count_duration<F>(f: F) -> impl Future<Output = (F::Output, Duration)> + Send
 where
-    F: Future,
+    F: Future + Send,
 {
     let t0 = Instant::now();
     f.map(move |ans| {

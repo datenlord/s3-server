@@ -378,6 +378,15 @@ impl S3Service {
         let presigned_url = signature_v4::PresignedUrl::from_query(qs)
             .map_err(|_| code_error!(S3ErrorCode::InvalidRequest, "Missing presigned fields"))?;
 
+        if let Some(content_sha256) = ctx.headers.get(&*X_AMZ_CONTENT_SHA256) {
+            if AmzContentSha256::from_header_str(content_sha256).is_err() {
+                return Err(code_error!(
+                    S3ErrorCode::XAmzContentSHA256Mismatch,
+                    "Invalid header: x-amz-content-sha256"
+                ));
+            }
+        }
+
         let auth_provider = match self.auth {
             Some(ref a) => &**a,
             None => return Err(not_supported!()),

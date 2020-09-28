@@ -1,8 +1,5 @@
 //! [`UploadPart`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html)
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 use crate::{
     dto::{ByteStream, UploadPartError, UploadPartOutput, UploadPartRequest},
     headers::names::{

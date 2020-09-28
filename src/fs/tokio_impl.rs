@@ -139,6 +139,26 @@ impl FileSystem {
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         tokio::fs::write(&path, &content).await
     }
+
+    /// get md5 sum
+    async fn get_md5_sum(&self, bucket: &str, key: &str) -> io::Result<String> {
+        let object_path = self.get_object_path(bucket, key)?;
+        let mut file = File::open(&object_path).await?;
+        let mut buf = vec![0; 4_usize.wrapping_mul(1024).wrapping_mul(1024)];
+        let mut md5_hash = Md5::new();
+        loop {
+            let nread = file.read(&mut buf).await?;
+            if nread == 0 {
+                break;
+            }
+            md5_hash.update(buf.get(..nread).unwrap_or_else(|| unreachable!()));
+        }
+        md5_hash
+            .finalize()
+            .apply(|a| faster_hex::hex_string(&a))
+            .unwrap_or_else(|_| unreachable!())
+            .apply(Ok)
+    }
 }
 
 impl Validators {
@@ -214,18 +234,26 @@ impl S3Storage for FileSystem {
                     let file_metadata = tokio::fs::metadata(&src_path).await?;
                     let last_modified = time::to_rfc3339(file_metadata.modified()?);
 
-                    let _ = tokio::fs::copy(src_path, dst_path).await?;
+                    let _ = tokio::fs::copy(&src_path, &dst_path).await?;
 
-                    {
-                        let src_metadata_path = self.get_metadata_path(bucket, key)?;
+                    debug!(
+                        "CopyObject: copy file from {} to {}",
+                        src_path.display(),
+                        dst_path.display()
+                    );
+
+                    let src_metadata_path = self.get_metadata_path(bucket, key)?;
+                    if src_metadata_path.exists() {
                         let dst_metadata_path =
                             self.get_metadata_path(&input.bucket, &input.key)?;
                         let _ = tokio::fs::copy(src_metadata_path, dst_metadata_path).await?;
                     }
 
+                    let md5_sum = self.get_md5_sum(bucket, key).await?;
+
                     let output = CopyObjectOutput {
                         copy_object_result: CopyObjectResult {
-                            e_tag: None,
+                            e_tag: Some(format!("\"{}\"", md5_sum)),
                             last_modified: Some(last_modified),
                         }
                         .apply(Some),
@@ -257,9 +285,15 @@ impl S3Storage for FileSystem {
     ) -> S3Result<DeleteObjectOutput, DeleteObjectError> {
         wrap_storage(async move {
             let path = self.get_object_path(&input.bucket, &input.key)?;
-
-            tokio::fs::remove_file(path).await?;
-
+            if input.key.ends_with('/') {
+                let mut dir = tokio::fs::read_dir(&path).await?;
+                let is_empty = dir.next().await.is_none();
+                if is_empty {
+                    tokio::fs::remove_dir(&path).await?;
+                }
+            } else {
+                tokio::fs::remove_file(path).await?;
+            }
             let output = DeleteObjectOutput::default(); // TODO: handle other fields
             Ok(Ok(output))
         })
@@ -276,9 +310,10 @@ impl S3Storage for FileSystem {
                 let path = self.get_object_path(&input.bucket, &object.key)?;
                 if path.exists() {
                     objects.push((path, object.key))
-                } else {
-                    return Err(io::Error::new(io::ErrorKind::NotFound, "No such object").into());
                 }
+                // else {
+                // return Err(io::Error::new(io::ErrorKind::NotFound, "No such object").into());
+                // }
             }
 
             let mut deleted: Vec<DeletedObject> = Vec::new();
@@ -326,8 +361,8 @@ impl S3Storage for FileSystem {
         input: GetObjectRequest,
     ) -> S3Result<GetObjectOutput, GetObjectError> {
         wrap_storage(async move {
-            let path = self.get_object_path(&input.bucket, &input.key)?;
-            let file = match File::open(&path).await {
+            let object_path = self.get_object_path(&input.bucket, &input.key)?;
+            let file = match File::open(&object_path).await {
                 Ok(file) => file,
                 Err(e) => {
                     error!("{}", e);
@@ -343,11 +378,28 @@ impl S3Storage for FileSystem {
 
             let object_metadata = self.load_metadata(&input.bucket, &input.key).await?;
 
+            let (md5_sum, duration) = {
+                let (ret, duration) =
+                    time::count_duration(self.get_md5_sum(&input.bucket, &input.key)).await;
+                let md5_sum =
+                    ret.map_err(|e| <S3Error<CompleteMultipartUploadError>>::Storage(e.into()))?;
+                (md5_sum, duration)
+            };
+
+            debug!(
+                "GetObject: calculate md5 sum: sum = {}, path = {}, size = {}, duration = {:?}",
+                md5_sum,
+                object_path.display(),
+                content_length,
+                duration
+            );
+
             let output: GetObjectOutput = GetObjectOutput {
                 body: Some(crate::dto::ByteStream::new(stream)),
                 content_length: Some(content_length.try_into()?),
                 last_modified: Some(last_modified),
                 metadata: object_metadata,
+                e_tag: Some(format!("\"{}\"", md5_sum)),
                 ..GetObjectOutput::default() // TODO: handle other fields
             };
 
@@ -477,6 +529,12 @@ impl S3Storage for FileSystem {
                 }
             }
 
+            objects.sort_by(|lhs, rhs| {
+                let lhs_key = lhs.key.as_deref().unwrap_or("");
+                let rhs_key = rhs.key.as_deref().unwrap_or("");
+                lhs_key.cmp(rhs_key)
+            });
+
             // TODO: handle other fields
             let output = ListObjectsOutput {
                 contents: Some(objects),
@@ -538,6 +596,12 @@ impl S3Storage for FileSystem {
                 }
             }
 
+            objects.sort_by(|lhs, rhs| {
+                let lhs_key = lhs.key.as_deref().unwrap_or("");
+                let rhs_key = rhs.key.as_deref().unwrap_or("");
+                lhs_key.cmp(rhs_key)
+            });
+
             // TODO: handle other fields
             let output = ListObjectsV2Output {
                 key_count: Some(objects.len().try_into()?),
@@ -577,6 +641,7 @@ impl S3Storage for FileSystem {
             bucket,
             key,
             metadata,
+            content_length,
             ..
         } = input;
 
@@ -586,8 +651,22 @@ impl S3Storage for FileSystem {
                 S3ErrorCode::IncompleteBody,
                 "You did not provide the number of bytes specified by the Content-Length HTTP header.".into(),))})?;
 
+        if key.ends_with('/') {
+            if content_length == Some(0) {
+                return wrap_storage(async move {
+                    let object_path = self.get_object_path(&bucket, &key)?;
+                    tokio::fs::create_dir_all(&object_path).await?;
+                    let output = PutObjectOutput::default();
+                    Ok(Ok(output))
+                })
+                .await;
+            } else {
+                return Err(S3Error::NotSupported);
+            }
+        }
+
         wrap_storage(async move {
-            let path = self.get_object_path(&bucket, &key)?;
+            let object_path = self.get_object_path(&bucket, &key)?;
 
             let mut md5_hash = Md5::new();
             let body = body.map_ok(|bytes| {
@@ -595,8 +674,8 @@ impl S3Storage for FileSystem {
                 bytes
             });
 
+            let file = File::create(&object_path).await?;
             let mut reader = tokio::io::stream_reader(body);
-            let file = File::create(&path).await?;
             let mut writer = tokio::io::BufWriter::new(file);
 
             let (ret, duration) =
@@ -604,7 +683,7 @@ impl S3Storage for FileSystem {
             let size = ret?;
             debug!(
                 "PutObject: write file: path = {}, size = {}, duration = {:?}",
-                path.display(),
+                object_path.display(),
                 size,
                 duration
             );
@@ -748,24 +827,13 @@ impl S3Storage for FileSystem {
             }
             drop(writer);
 
-            let mut file = File::open(&object_path).await?;
-            let file_size = file.metadata().await?.len();
+            let file_size = tokio::fs::metadata(&object_path).await?.len();
 
-            let (md5_sum, duration) = time::count_duration(async {
-                let mut buf = vec![0; 4_usize.wrapping_mul(1024).wrapping_mul(1024)];
-                let mut md5_hash = Md5::new();
-                while let Ok(nread) = file.read(&mut buf).await {
-                    if nread == 0{
-                        break
-                    }
-                    md5_hash.update(buf.get(..nread).unwrap_or_else(|| unreachable!()));
-                }
-                md5_hash
-                    .finalize()
-                    .apply(|a| faster_hex::hex_string(&a))
-                    .unwrap_or_else(|_| unreachable!())
-            })
-            .await;
+            let (md5_sum, duration) = {
+                let (ret,duration) = time::count_duration(self.get_md5_sum(&bucket, &key)).await;
+                let md5_sum = ret.map_err(|e|<S3Error<CompleteMultipartUploadError>>::Storage(e.into()))?;
+                (md5_sum, duration)
+            };
 
             debug!("CompleteMultipartUpload: calculate md5 sum: sum = {}, path = {}, size = {}, duration = {:?}",
                 md5_sum,

@@ -1,8 +1,5 @@
 //! [`CreateMultipartUpload`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CreateMultipartUpload.html)
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 use crate::{
     dto::{CreateMultipartUploadError, CreateMultipartUploadOutput, CreateMultipartUploadRequest},
     headers::names::{

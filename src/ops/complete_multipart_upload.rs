@@ -1,8 +1,5 @@
 //! [`CompleteMultipartUpload`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html)
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 use crate::{
     dto::{
         CompleteMultipartUploadError, CompleteMultipartUploadOutput,
@@ -13,9 +10,7 @@ use crate::{
         X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID, X_AMZ_VERSION_ID,
     },
     output::wrap_output,
-    utils::{
-        deserialize_xml_body, OrderedHeaders, OrderedQs, RequestExt, ResponseExt, XmlWriterExt,
-    },
+    utils::{deserialize_xml_body, RequestExt, ResponseExt, XmlWriterExt},
     Body, BoxStdError, Request, Response, S3Output, S3Result,
 };
 

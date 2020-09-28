@@ -38,7 +38,6 @@ fn uri_encode(output: &mut String, input: &str, encode_slash: bool) {
             _ => {
                 macro_rules! to_hex {
                     ($n:expr) => {{
-                        #[allow(clippy::unreachable)]
                         *HEX_UPPERCASE_TABLE
                             .get(usize::from($n))
                             .unwrap_or_else(|| unreachable!()) // a 4-bits number is always less then 16
@@ -52,7 +51,6 @@ fn uri_encode(output: &mut String, input: &str, encode_slash: bool) {
         }
     }
 
-    #[allow(clippy::unreachable)]
     std::str::from_utf8(buf.as_ref())
         .unwrap_or_else(|_| unreachable!()) // an ascii string is always a utf-8 string
         .apply(|s| output.push_str(s))
