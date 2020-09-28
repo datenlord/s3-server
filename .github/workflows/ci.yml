@@ -95,3 +95,61 @@ jobs:
           version: latest
       - run: cargo generate-lockfile
       - run: cargo audit
+
+  e2e-test:
+    name: E2E Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: ${{ env.CI_RUST_TOOLCHAIN }}
+          override: true
+
+      - name: Check out minio code
+        uses: actions/checkout@v2
+        with:
+          repository: minio/minio
+          path: ./minio
+
+      - name: Select test groups
+        run: |
+          pushd ./minio/mint
+
+          enabled_test_groups=("mc" "s3cmd")
+          
+          mkdir tmp_build
+          mkdir tmp_run_core
+          for test_group_name in ${enabled_test_groups[@]}
+          do
+            mv ./build/$test_group_name tmp_build/
+            mv ./run/core/$test_group_name tmp_run_core/
+          done
+          rm -rf build
+          rm -rf run/core
+          mv tmp_build build
+          mv tmp_run_core run/core
+
+          rm remove-packages.list
+          touch remove-packages.list
+
+          popd
+      
+      - name: Build mint
+        run: |
+          pushd ./minio
+          docker build -t minio/mint . -f Dockerfile.mint
+          popd
+
+      - name: Build example s3
+        uses: actions-rs/cargo@v1
+        with:
+          command: build 
+          args: --example s3
+
+      - name: Run mint
+        run: |
+          mkdir data
+          RUST_LOG=info ./scripts/s3-auth.sh data &
+          ./scripts/mint.sh
