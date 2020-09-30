@@ -26,7 +26,7 @@ pub enum AmzCopySource<'a> {
 }
 
 /// `ParseAmzCopySourceError`
-#[allow(missing_copy_implementations)]
+#[allow(missing_copy_implementations)] // Why? See `crate::path::ParseS3PathError`.
 #[derive(Debug, thiserror::Error)]
 pub enum ParseAmzCopySourceError {
     /// pattern mismatch

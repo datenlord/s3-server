@@ -39,7 +39,7 @@ pub struct PresignedUrl<'a> {
 
 /// `ParsePresignedUrlError`
 #[allow(missing_copy_implementations)]
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)] // Why? See `crate::path::ParseS3PathError`.
 #[error("ParsePresignedUrlError")]
 pub struct ParsePresignedUrlError {
     /// priv place holder

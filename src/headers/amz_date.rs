@@ -1,8 +1,7 @@
 //! x-amz-date
 
 /// x-amz-date
-#[allow(missing_copy_implementations)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct AmzDate {
     /// year
     year: u32,
@@ -19,7 +18,7 @@ pub struct AmzDate {
 }
 
 /// `ParseAmzDateError`
-#[allow(missing_copy_implementations)]
+#[allow(missing_copy_implementations)] // Why? See `crate::path::ParseS3PathError`.
 #[derive(Debug, thiserror::Error)]
 #[error("ParseAmzDateError")]
 pub struct ParseAmzDateError {

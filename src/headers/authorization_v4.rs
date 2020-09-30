@@ -111,7 +111,7 @@ impl<'a> CredentialV4<'a> {
 }
 
 /// `ParseAuthorizationError`
-#[allow(missing_copy_implementations)]
+#[allow(missing_copy_implementations)] // Why? See `crate::path::ParseS3PathError`.
 #[derive(Debug, thiserror::Error)]
 #[error("ParseAuthorizationError")]
 pub struct ParseAuthorizationError {

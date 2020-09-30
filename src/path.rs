@@ -24,6 +24,10 @@ pub enum S3Path<'a> {
     },
 }
 
+// Why allow `missing_copy_implementations` ?
+// 1. We can't yet guarantee that the error type is `Copy` in the future.
+// 2. A copyable error type is strange. `std::num::ParseIntError` is `Clone` but not `Copy`.
+
 /// An error which can be returned when parsing a s3 path
 #[allow(missing_copy_implementations)]
 #[derive(Debug, thiserror::Error)]
