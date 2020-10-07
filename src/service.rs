@@ -39,10 +39,10 @@ use hyper::{
     header::{AsHeaderName, AUTHORIZATION, CONTENT_TYPE},
     Body, Method,
 };
-use log::{debug, error};
 use mime::Mime;
 use multipart::Multipart;
 use serde::de::DeserializeOwned;
+use tracing::{debug, error};
 
 /// Generic S3 service which wraps a S3 storage
 pub struct S3Service {

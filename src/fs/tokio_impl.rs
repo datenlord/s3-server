@@ -36,10 +36,10 @@ use std::{
 
 use async_trait::async_trait;
 use futures::TryStreamExt;
-use log::{debug, error};
 use md5::{Digest, Md5};
 use path_absolutize::Absolutize;
 use tokio::{fs::File, io::AsyncReadExt, stream::StreamExt};
+use tracing::{debug, error};
 use uuid::Uuid;
 
 /// A S3 storage implementation based on file system
