@@ -26,8 +26,9 @@ use anyhow::Result;
 use futures::future;
 use hyper::server::Server;
 use hyper::service::make_service_fn;
-use log::{debug, info};
 use structopt::StructOpt;
+use tracing::{debug, info};
+use tracing_subscriber::EnvFilter;
 
 #[derive(StructOpt)]
 struct Args {
@@ -47,7 +48,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    env_logger::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc3339())
+        .init();
 
     let args: Args = Args::from_args();
 
