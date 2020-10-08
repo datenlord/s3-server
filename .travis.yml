@@ -6,7 +6,9 @@ arch:
   - amd64
   - arm64
 
-os: linux
+os: 
+  - linux
+  - osx
 
 language: rust
 
