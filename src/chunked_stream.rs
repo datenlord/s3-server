@@ -202,11 +202,11 @@ impl ChunkedStream {
                 let len = idx.wrapping_add(1); // NOTE: idx < bytes.len()
                 let leading = bytes.split_to(len);
                 buf.extend_from_slice(leading.as_ref());
-                Some(bytes)
-            } else {
-                buf.extend_from_slice(bytes.as_ref());
-                None
+                return Some(bytes);
             }
+
+            buf.extend_from_slice(bytes.as_ref());
+            None
         };
 
         if let Some(remaining_bytes) = push_meta_bytes(prev_bytes) {

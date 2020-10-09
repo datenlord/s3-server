@@ -58,7 +58,7 @@ impl S3Output for UploadPartOutput {
 /// transform stream
 fn transform_stream(body: Body) -> ByteStream {
     body.map(|try_chunk| {
-        try_chunk.map(|c| c).map_err(|e| {
+        try_chunk.map_err(|e| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("Error obtaining chunk: {}", e),

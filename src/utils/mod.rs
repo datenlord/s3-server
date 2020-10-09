@@ -43,7 +43,7 @@ macro_rules! static_regex {
         const RE: &'static str = const_str::verified_regex!($re);
 
         static PATTERN: Lazy<Regex> =
-            Lazy::new(|| Regex::new(RE).unwrap_or_else(|e| panic!("static regex error: {}", e)));
+            Lazy::new(|| Regex::new(RE).unwrap_or_else(|_| unreachable!()));
 
         &*PATTERN
     }};

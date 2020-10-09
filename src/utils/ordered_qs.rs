@@ -32,8 +32,8 @@ impl OrderedQs {
     /// Get query value by name. Time `O(logn)`
     pub fn get(&self, name: &str) -> Option<&str> {
         let qs = self.qs.as_ref();
-        match qs.binary_search_by_key(&name, |(n, _)| n.as_str()) {
-            Ok(idx) => qs.get(idx).map(|(_, v)| v.as_str()),
+        match qs.binary_search_by_key(&name, |&(ref n, _)| n.as_str()) {
+            Ok(idx) => qs.get(idx).map(|&(_, ref v)| v.as_str()),
             Err(_) => None,
         }
     }

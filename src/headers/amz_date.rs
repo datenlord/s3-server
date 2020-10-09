@@ -50,13 +50,11 @@ impl AmzDate {
                     take(2_usize),
                     tag("Z"),
                 ))),
-                |(year_str, month_str, day_str, _, hour_str, minute_str, second_str, _)| {
-                    [
-                        year_str, month_str, day_str, hour_str, minute_str, second_str,
-                    ]
-                    .iter()
-                    .copied()
-                    .all(|s: &&str| s.as_bytes().iter().all(u8::is_ascii_digit))
+                |&s: &(&str, &str, &str, &str, &str, &str, &str, &str)| {
+                    [s.0, s.1, s.2, s.4, s.5, s.6]
+                        .iter()
+                        .copied()
+                        .all(|s: &str| s.as_bytes().iter().all(u8::is_ascii_digit))
                 },
             );
 
