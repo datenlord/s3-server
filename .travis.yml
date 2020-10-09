@@ -15,6 +15,7 @@ language: rust
 rust:
   - stable
   - nightly
+  - 1.46.0 # MSRV
 
 jobs:
   allow_failures:
