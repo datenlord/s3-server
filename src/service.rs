@@ -312,7 +312,7 @@ impl S3Service {
         let body = req.take_body();
 
         let path = S3Path::try_from_path(req.uri().path()).map_err(|e| {
-            match e.kind() {
+            match *e.kind() {
                 S3PathErrorKind::InvalidPath => {
                     (S3ErrorCode::InvalidURI, "Couldn't parse the specified URI.")
                 }
@@ -553,7 +553,7 @@ impl S3Service {
         let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?;
 
         // --- header auth ---
-        let is_stream = match &amz_content_sha256 {
+        let is_stream = match amz_content_sha256 {
             AmzContentSha256::UnsignedPayload => return Ok(()),
             AmzContentSha256::SingleChunk { .. } => false,
             AmzContentSha256::MultipleChunks => true,
@@ -564,8 +564,8 @@ impl S3Service {
             None => return Err(not_supported!()),
         };
 
-        let auth: AuthorizationV4<'_> =
-            extract_authorization_v4(&ctx.headers)?.also(|auth| auth.signed_headers.sort());
+        let auth: AuthorizationV4<'_> = extract_authorization_v4(&ctx.headers)?
+            .also(|auth| auth.signed_headers.sort_unstable());
 
         let secret_key = auth_provider
             .get_secret_access_key(auth.credential.access_key_id)

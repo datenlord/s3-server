@@ -21,7 +21,7 @@ impl<'a> OrderedHeaders<'a> {
     pub fn from_slice_unchecked(slice: &[(&'a str, &'a str)]) -> Self {
         let mut headers = SmallVec::new();
         headers.extend_from_slice(slice);
-        headers.sort();
+        headers.sort_unstable();
         Self { headers }
     }
 
@@ -33,7 +33,7 @@ impl<'a> OrderedHeaders<'a> {
         for (name, value) in req.headers().iter() {
             headers.push((name.as_str(), value.to_str()?));
         }
-        headers.sort();
+        headers.sort_unstable();
 
         Ok(Self { headers })
     }
@@ -55,8 +55,8 @@ impl<'a> OrderedHeaders<'a> {
     /// Get header value by name. Time `O(logn)`
     pub fn get(&self, name: impl AsHeaderName) -> Option<&'a str> {
         let headers = self.headers.as_slice();
-        let ans = match headers.binary_search_by_key(&name.as_str(), |(n, _)| *n) {
-            Ok(idx) => headers.get(idx).map(|(_, v)| *v),
+        let ans = match headers.binary_search_by_key(&name.as_str(), |&(n, _)| n) {
+            Ok(idx) => headers.get(idx).map(|&(_, v)| v),
             Err(_) => None,
         };
         drop(name);

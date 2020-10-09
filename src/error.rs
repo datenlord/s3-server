@@ -55,13 +55,13 @@ impl XmlErrorResponse {
 
 impl<E: Display> Display for S3Error<E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Operation(e) => write!(f, "Operation: {}", e),
-            Self::InvalidRequest(e) => write!(f, "Invalid request: {}", e),
-            Self::InvalidOutput(e) => write!(f, "Invalid output: {}", e),
-            Self::Storage(e) => write!(f, "Storage: {}", e),
-            Self::Auth(e) => write!(f, "Auth: {}", e),
-            Self::Other(e) => write!(f, "Other: {:?}", e),
+        match *self {
+            Self::Operation(ref e) => write!(f, "Operation: {}", e),
+            Self::InvalidRequest(ref e) => write!(f, "Invalid request: {}", e),
+            Self::InvalidOutput(ref e) => write!(f, "Invalid output: {}", e),
+            Self::Storage(ref e) => write!(f, "Storage: {}", e),
+            Self::Auth(ref e) => write!(f, "Auth: {}", e),
+            Self::Other(ref e) => write!(f, "Other: {:?}", e),
             Self::NotSupported => write!(f, "Not supported"),
         }
     }
@@ -69,12 +69,12 @@ impl<E: Display> Display for S3Error<E> {
 
 impl<E: Error + 'static> Error for S3Error<E> {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            Self::Operation(e1) => Some(e1),
-            Self::InvalidRequest(e2) => Some(e2.as_ref()),
-            Self::InvalidOutput(e3) => Some(e3.as_ref()),
-            Self::Storage(e4) => Some(e4.as_ref()),
-            Self::Auth(e5) => Some(e5.as_ref()),
+        match *self {
+            Self::Operation(ref e1) => Some(e1),
+            Self::InvalidRequest(ref e2) => Some(e2.as_ref()),
+            Self::InvalidOutput(ref e3) => Some(e3.as_ref()),
+            Self::Storage(ref e4) => Some(e4.as_ref()),
+            Self::Auth(ref e5) => Some(e5.as_ref()),
             Self::Other(_) | Self::NotSupported => None,
         }
     }

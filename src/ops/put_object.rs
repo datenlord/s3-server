@@ -29,7 +29,7 @@ use hyper::header::{
 /// transform stream
 fn transform_stream(body: Body) -> ByteStream {
     body.map(|try_chunk| {
-        try_chunk.map(|c| c).map_err(|e| {
+        try_chunk.map_err(|e| {
             io::Error::new(
                 io::ErrorKind::Other,
                 format!("Error obtaining chunk: {}", e),
@@ -51,7 +51,7 @@ fn extract_from_multipart(
     multipart.assign_from_optional_field("x-amz-storage-class", &mut input.storage_class)?;
 
     let mut metadata: HashMap<String, String> = HashMap::new();
-    for (name, value) in &mut multipart.fields {
+    for &mut (ref mut name, ref mut value) in &mut multipart.fields {
         name.make_ascii_lowercase();
         let meta_prefix = "x-amz-meta-";
         if name.starts_with(meta_prefix) {

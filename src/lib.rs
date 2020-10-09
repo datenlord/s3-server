@@ -39,6 +39,7 @@
     clippy::missing_inline_in_public_items, // In general, it is not bad
     clippy::module_name_repetitions, // Allowed by default
     clippy::unreachable, // impossible
+    clippy::blanket_clippy_restriction_lints,
 )]
 #![cfg_attr(test, allow(
     clippy::panic, // Panic when fatal failures occur

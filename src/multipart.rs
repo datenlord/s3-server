@@ -35,7 +35,7 @@ pub struct Multipart {
 impl Multipart {
     /// find field value
     pub fn find_field_value<'a>(&'a self, name: &str) -> Option<&'a str> {
-        self.fields.iter().rev().find_map(|(n, v)| {
+        self.fields.iter().rev().find_map(|&(ref n, ref v)| {
             if n.eq_ignore_ascii_case(name) {
                 Some(v.as_str())
             } else {
