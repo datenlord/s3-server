@@ -110,7 +110,11 @@ fn wrap_handle_sync<T>(f: impl FnOnce() -> Result<T, BoxStdError>) -> S3Result<T
 
 macro_rules! call_s3_operation{
     (@debug $op:ident)=>{
-        debug!("call_s3_operation at {}:{}: {}", file!(), line!(), stringify!($op));
+        debug!(
+            location = concat!(file!(),":",line!()),
+            op = stringify!($op),
+            "call_s3_operation"
+        );
     };
 
     ($op:ident with () by $storage:expr)  => {{
@@ -175,11 +179,10 @@ macro_rules! code_error {
     ($code:expr,$msg:expr) => {{
         let msg_string: String = $msg.into();
         debug!(
-            "generate code error at {}:{}: code = {:?}, msg = {}",
-            file!(),
-            line!(),
-            $code,
-            msg_string
+            location = concat!(file!(),":",line!()),
+            code = ?$code,
+            msg = ?msg_string,
+            "generate code error",
         );
         S3Error::Other(XmlErrorResponse::from_code_msg($code, msg_string))
     }};
@@ -188,7 +191,10 @@ macro_rules! code_error {
 /// Create a `S3Error::NotSupported`
 macro_rules! not_supported {
     () => {{
-        debug!("generate NotSupported at {}:{}", file!(), line!());
+        debug!(
+            location = concat!(file!(), ":", line!()),
+            "generate NotSupported"
+        );
         S3Error::NotSupported
     }};
 }
@@ -272,10 +278,17 @@ impl S3Service {
     /// Call the s3 service with `hyper::Request<hyper::Body>`
     /// # Errors
     /// Returns an `Err` if the service failed
+    #[tracing::instrument(
+        level = "debug",
+        skip(self, req),
+        fields(
+            method = ?req.method(),
+            uri = ?req.uri(),
+            start_time = ?chrono::Utc::now(),
+        )
+    )]
     pub async fn hyper_call(&self, req: Request) -> Result<Response, BoxStdError> {
-        let method = req.method().clone();
-        let uri = req.uri().clone();
-        debug!("{} \"{:?}\" request:\n{:#?}", method, uri, req);
+        debug!("req = \n{:#?}", req);
 
         let (result, duration) = time::count_duration(self.handle(req)).await;
 
@@ -289,17 +302,11 @@ impl S3Service {
 
         match result {
             Ok(resp) => {
-                debug!(
-                    "{} \"{:?}\" => duration: {:?}, response:\n{:#?}",
-                    method, uri, duration, resp
-                );
+                debug!("duration = {:?}, resp = \n{:#?}", duration, resp);
                 resp
             }
             Err(err) => {
-                error!(
-                    "{} \"{:?}\" => duration: {:?}, error:\n{:#?}",
-                    method, uri, duration, err
-                );
+                error!(?duration, ?err);
                 XmlErrorResponse::from_code_msg(S3ErrorCode::InternalError, err.to_string())
                     .try_into_response()?
             }

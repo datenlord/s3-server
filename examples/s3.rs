@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
     let mut fs = FileSystem::new(&args.fs_root)?;
     fs.set_storage_class_validator(|s| ["STANDARD", "REDUCED_REDUNDANCY"].contains(&s));
 
-    debug!("fs: {:?}", &fs);
+    debug!(?fs);
 
     // setup the service
     let mut service = S3Service::new(fs);
@@ -67,7 +67,7 @@ async fn main() -> Result<()> {
     if let (Some(access_key), Some(secret_key)) = (args.access_key, args.secret_key) {
         let mut auth = SimpleAuth::new();
         auth.register(access_key, secret_key);
-        debug!("auth: {:?}", &auth);
+        debug!(?auth);
         service.set_auth(auth);
     }
 
