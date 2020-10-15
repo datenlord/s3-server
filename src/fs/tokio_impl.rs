@@ -237,9 +237,9 @@ impl S3Storage for FileSystem {
                     let _ = tokio::fs::copy(&src_path, &dst_path).await?;
 
                     debug!(
-                        "CopyObject: copy file from {} to {}",
-                        src_path.display(),
-                        dst_path.display()
+                        from = %src_path.display(),
+                        to = %dst_path.display(),
+                        "CopyObject: copy file",
                     );
 
                     let src_metadata_path = self.get_metadata_path(bucket, key)?;
@@ -365,7 +365,7 @@ impl S3Storage for FileSystem {
             let file = match File::open(&object_path).await {
                 Ok(file) => file,
                 Err(e) => {
-                    error!("{}", e);
+                    error!(error = %e, "GetObject: open file");
                     return Ok(Err(GetObjectError::NoSuchKey(
                         "The specified key does not exist.".into(),
                     )));
@@ -387,11 +387,11 @@ impl S3Storage for FileSystem {
             };
 
             debug!(
-                "GetObject: calculate md5 sum: sum = {}, path = {}, size = {}, duration = {:?}",
-                md5_sum,
-                object_path.display(),
-                content_length,
-                duration
+                sum = ?md5_sum,
+                path = %object_path.display(),
+                size = ?content_length,
+                ?duration,
+                "GetObject: calculate md5 sum",
             );
 
             let output: GetObjectOutput = GetObjectOutput {
@@ -682,10 +682,10 @@ impl S3Storage for FileSystem {
                 time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
             let size = ret?;
             debug!(
-                "PutObject: write file: path = {}, size = {}, duration = {:?}",
-                object_path.display(),
-                size,
-                duration
+                path = %object_path.display(),
+                ?size,
+                ?duration,
+                "PutObject: write file",
             );
             if let Some(ref metadata) = metadata {
                 self.save_metadata(&bucket, &key, metadata).await?;
@@ -755,10 +755,10 @@ impl S3Storage for FileSystem {
                 time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
             let size = ret?;
             debug!(
-                "UploadPart: write file: path = {}, size = {}, duration = {:?}",
-                file_path.display(),
-                size,
-                duration
+                path = %file_path.display(),
+                ?size,
+                ?duration,
+                "UploadPart: write file",
             );
 
             let md5_sum = md5_hash
@@ -817,11 +817,11 @@ impl S3Storage for FileSystem {
                     time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
                 let size = ret?;
                 debug!(
-                    "CompleteMultipartUpload: write file from {} to {}, size = {}, duration = {:?}",
-                    part_path.display(),
-                    object_path.display(),
-                    size,
-                    duration
+                    from = %part_path.display(),
+                    to = %object_path.display(),
+                    ?size,
+                    ?duration,
+                    "CompleteMultipartUpload: write file",
                 );
                 tokio::fs::remove_file(&part_path).await?;
             }
@@ -830,16 +830,18 @@ impl S3Storage for FileSystem {
             let file_size = tokio::fs::metadata(&object_path).await?.len();
 
             let (md5_sum, duration) = {
-                let (ret,duration) = time::count_duration(self.get_md5_sum(&bucket, &key)).await;
-                let md5_sum = ret.map_err(|e|<S3Error<CompleteMultipartUploadError>>::Storage(e.into()))?;
+                let (ret, duration) = time::count_duration(self.get_md5_sum(&bucket, &key)).await;
+                let md5_sum =
+                    ret.map_err(|e| <S3Error<CompleteMultipartUploadError>>::Storage(e.into()))?;
                 (md5_sum, duration)
             };
 
-            debug!("CompleteMultipartUpload: calculate md5 sum: sum = {}, path = {}, size = {}, duration = {:?}",
-                md5_sum,
-                object_path.display(),
-                file_size,
-                duration
+            debug!(
+                sum = ?md5_sum,
+                path = %object_path.display(),
+                size = ?file_size,
+                ?duration,
+                "CompleteMultipartUpload: calculate md5 sum",
             );
 
             let e_tag = format!("\"{}\"", md5_sum);
