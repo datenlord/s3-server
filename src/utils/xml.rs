@@ -1,6 +1,7 @@
 //! helper trait for writing xml
 
-use std::{io, ops::Deref};
+use std::io;
+use std::ops::Deref;
 use xml::writer::{events::XmlEvent, EventWriter, Result};
 
 /// helper trait for writing xml

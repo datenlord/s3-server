@@ -1,5 +1,7 @@
 //! x-amz-copy-source
 
+use crate::path::S3Path;
+
 use regex::Regex;
 
 /// x-amz-copy-source
@@ -73,11 +75,11 @@ impl<'a> AmzCopySource<'a> {
                 let bucket = captures.get(1).unwrap().as_str();
                 let key = captures.get(2).unwrap().as_str();
 
-                if !crate::path::check_bucket_name(bucket) {
+                if !S3Path::check_bucket_name(bucket) {
                     return Err(ParseAmzCopySourceError::InvalidBucketName);
                 }
 
-                if !crate::path::check_key(key) {
+                if !S3Path::check_key(key) {
                     return Err(ParseAmzCopySourceError::InvalidKey);
                 }
 

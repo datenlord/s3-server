@@ -1,6 +1,6 @@
 //! x-amz-content-sha256
 
-use crate::utils::{crypto::is_sha256_checksum, Apply};
+use crate::utils::{crypto, Apply};
 
 /// `x-amz-content-sha256`
 ///
@@ -35,7 +35,7 @@ impl<'a> AmzContentSha256<'a> {
             "UNSIGNED-PAYLOAD" => Self::UnsignedPayload,
             "STREAMING-AWS4-HMAC-SHA256-PAYLOAD" => Self::MultipleChunks,
             payload_checksum => {
-                if !is_sha256_checksum(payload_checksum) {
+                if !crypto::is_sha256_checksum(payload_checksum) {
                     return Err(ParseAmzContentSha256Error { _priv: () });
                 }
                 Self::SingleChunk { payload_checksum }

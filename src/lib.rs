@@ -1,4 +1,4 @@
-//! S3 service
+//! S3 server
 
 #![forbid(unsafe_code)]
 #![deny(
@@ -38,51 +38,43 @@
     clippy::implicit_return, // actually omitting the return keyword is idiomatic Rust code
     clippy::missing_inline_in_public_items, // In general, it is not bad
     clippy::module_name_repetitions, // Allowed by default
-    clippy::unreachable, // impossible
+    clippy::panic, // Panic when fatal failures occur
     clippy::blanket_clippy_restriction_lints,
 )]
 #![cfg_attr(test, allow(
-    clippy::panic, // Panic when fatal failures occur
     clippy::unwrap_used, // Tests need `unwrap`
     clippy::indexing_slicing, // Fail fast
 ))]
 #![allow(
     // FIXME: Deny lints below
-    clippy::multiple_crate_versions
+    clippy::multiple_crate_versions,
+
+    dead_code, // TODO: remove it
+    clippy::todo, // TODO: remove it
 )]
 
 #[macro_use]
 pub(crate) mod utils;
 
-mod auth;
-mod chunked_stream;
-mod error;
-mod error_code;
-mod multipart;
+mod data_structures;
 mod ops;
 mod output;
-mod service;
 mod signature_v4;
+
+mod auth;
+mod service;
 mod storage;
 
 pub use self::auth::{S3Auth, SimpleAuth};
-pub use self::error::{S3Error, S3Result, XmlErrorResponse};
-pub use self::error_code::S3ErrorCode;
-pub use self::output::S3Output;
 pub use self::service::S3Service;
 pub use self::storage::S3Storage;
 
 pub mod dto;
+pub mod errors;
 pub mod headers;
 pub mod path;
-pub mod query;
-
-pub mod fs;
-
-#[cfg(any(feature = "rt-async-std"))]
-pub mod compat;
-
-pub(crate) use hyper::Body;
+pub mod storages;
+pub mod streams;
 
 /// Request type
 pub(crate) type Request = hyper::Request<Body>;
@@ -92,3 +84,7 @@ pub(crate) type Response = hyper::Response<Body>;
 
 /// `Box<dyn std::error::Error + Send + Sync + 'static>`
 pub(crate) type BoxStdError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+pub(crate) use async_trait::async_trait;
+pub(crate) use hyper::{Body, Method, StatusCode};
+pub(crate) use mime::Mime;

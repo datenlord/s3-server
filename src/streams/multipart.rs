@@ -3,16 +3,21 @@
 //! See <https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectPOST.html>
 //!
 
-use crate::utils::{async_stream::AsyncTryStream, Also, Apply};
+use crate::utils::Also;
 
-use std::{io, mem, pin::Pin, str::FromStr};
+use std::fmt::{self, Debug};
+use std::future::Future;
+use std::io;
+use std::mem;
+use std::pin::Pin;
+use std::str::FromStr;
 
 use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
 use memchr::memchr_iter;
+use transform_stream::{AsyncTryStream, Yielder};
 
 /// form file
-
 #[derive(Debug)]
 pub struct File {
     /// name
@@ -34,6 +39,7 @@ pub struct Multipart {
 
 impl Multipart {
     /// find field value
+    #[must_use]
     pub fn find_field_value<'a>(&'a self, name: &str) -> Option<&'a str> {
         self.fields.iter().rev().find_map(|&(ref n, ref v)| {
             if n.eq_ignore_ascii_case(name) {
@@ -45,20 +51,22 @@ impl Multipart {
     }
 
     /// assign from optional field
-    pub fn assign_from_optional_field<T>(
-        &self,
-        name: &str,
-        opt: &mut Option<T>,
-    ) -> Result<(), T::Err>
+    pub(crate) fn assign<T>(&self, name: &str, opt: &mut Option<T>) -> Result<(), T::Err>
     where
         T: FromStr,
-        T::Err: std::error::Error + Send + Sync + 'static,
     {
         if let Some(s) = self.find_field_value(name) {
             let v = s.parse()?;
             *opt = Some(v);
         }
         Ok(())
+    }
+
+    /// assign string from optional field
+    pub(crate) fn assign_str(&self, name: &str, opt: &mut Option<String>) {
+        if let Some(s) = self.find_field_value(name) {
+            *opt = Some(s.to_owned());
+        }
     }
 }
 
@@ -71,9 +79,11 @@ fn generate_format_error() -> io::Error {
 }
 
 /// transform multipart
+/// # Errors
+/// Returns an `Err` if the format is invalid
 pub async fn transform_multipart<S>(body_stream: S, boundary: &'_ [u8]) -> io::Result<Multipart>
 where
-    S: Stream<Item = io::Result<Bytes>> + Send + 'static,
+    S: Stream<Item = io::Result<Bytes>> + Send + Sync + 'static,
 {
     let mut buf = Vec::new();
 
@@ -115,11 +125,10 @@ async fn try_parse<S>(
     boundary: &'_ [u8],
 ) -> Result<io::Result<Multipart>, (Pin<Box<S>>, Box<[u8]>)>
 where
-    S: Stream<Item = io::Result<Bytes>> + Send + 'static,
+    S: Stream<Item = io::Result<Bytes>> + Send + Sync + 'static,
 {
-    let pat_without_crlf = pat
-        .get(..pat.len().wrapping_sub(2))
-        .unwrap_or_else(|| unreachable!());
+    #[allow(clippy::indexing_slicing)]
+    let pat_without_crlf = &pat[..pat.len().wrapping_sub(2)];
 
     fields.clear();
 
@@ -177,10 +186,10 @@ where
                 let value = match lines.split_to(pat_without_crlf) {
                     None => return Err((body, pat)),
                     Some(b) => {
-                        match std::str::from_utf8(
-                            b.get(..b.len().saturating_sub(2))
-                                .unwrap_or_else(|| unreachable!()),
-                        ) {
+                        #[allow(clippy::indexing_slicing)]
+                        let b = &b[..b.len().saturating_sub(2)];
+
+                        match std::str::from_utf8(b) {
                             Err(_) => return Ok(Err(generate_format_error())),
                             Ok(s) => s,
                         }
@@ -195,7 +204,11 @@ where
                     Some(Err(_)) => return Ok(Err(generate_format_error())),
                     Some(Ok(s)) => s,
                 };
-                let remaining_bytes = Bytes::copy_from_slice(lines.slice);
+                let remaining_bytes = if lines.slice.is_empty() {
+                    None
+                } else {
+                    Some(Bytes::copy_from_slice(lines.slice))
+                };
                 let file_stream = FileStream::new(body, boundary, remaining_bytes);
                 let file = File {
                     name: filename.to_owned(),
@@ -223,88 +236,119 @@ pub enum FileStreamError {
     Io(io::Error),
 }
 
+/// `Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>`
+type SyncBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>;
+
 /// File stream
-#[derive(Debug)]
 pub struct FileStream {
     /// inner stream
-    inner: AsyncTryStream<Bytes, FileStreamError>,
+    inner:
+        AsyncTryStream<Bytes, FileStreamError, SyncBoxFuture<'static, Result<(), FileStreamError>>>,
+}
+
+impl Debug for FileStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "FileStream {{...}}")
+    }
 }
 
 impl FileStream {
     /// Constructs a `FileStream`
-    fn new<S>(mut body: Pin<Box<S>>, boundary: &'_ [u8], prev_bytes: Bytes) -> Self
+    fn new<S>(body: Pin<Box<S>>, boundary: &'_ [u8], prev_bytes: Option<Bytes>) -> Self
     where
-        S: Stream<Item = io::Result<Bytes>> + Send + 'static,
+        S: Stream<Item = io::Result<Bytes>> + Send + Sync + 'static,
     {
-        <AsyncTryStream<Bytes, FileStreamError>>::new(|mut y| {
-            // `\r\n--{boundary}`
-            let crlf_pat: Box<[u8]> = Vec::new()
-                .also(|v| v.extend_from_slice(b"\r\n--"))
-                .also(|v| v.extend_from_slice(boundary))
-                .into();
+        /// internal async generator
+        async fn gen<S>(
+            mut y: Yielder<Result<Bytes, FileStreamError>>,
+            mut body: Pin<Box<S>>,
+            crlf_pat: Box<[u8]>,
+            prev_bytes: Option<Bytes>,
+        ) -> Result<(), FileStreamError>
+        where
+            S: Stream<Item = io::Result<Bytes>> + Send + Sync + 'static,
+        {
+            let mut state: u8;
 
-            Box::pin(async move {
-                let mut pat_idx = 0;
-                let mut bytes_idx = 0;
-                let mut prev_block = None;
-                let mut push_bytes = |mut bytes: Bytes| {
-                    if pat_idx > 0 {
-                        let suffix = crlf_pat.get(pat_idx..).unwrap_or_else(|| unreachable!());
-                        if bytes.starts_with(suffix) {
-                            if let Some(block) = prev_block.take() {
-                                y.yield_one(block)
-                            }
-                            return None;
-                        } else {
-                            pat_idx = 0;
-                        }
+            let mut bytes;
+            let mut buf: Vec<u8> = Vec::new();
+
+            if let Some(b) = prev_bytes {
+                state = 2;
+                bytes = b;
+            } else {
+                state = 1;
+                bytes = Bytes::new();
+            }
+
+            'dfa: loop {
+                match state {
+                    1 => {
+                        match body.as_mut().next().await {
+                            None => return Err(FileStreamError::Incomplete),
+                            Some(Err(e)) => return Err(FileStreamError::Io(e)),
+                            Some(Ok(b)) => bytes = b,
+                        };
+                        state = 2;
+                        continue 'dfa;
                     }
-                    for idx in memchr_iter(b'\r', bytes.as_ref()) {
-                        let remaining = bytes.get(idx..).unwrap_or_else(|| unreachable!());
+                    2 => {
+                        for idx in memchr_iter(b'\r', bytes.as_ref()) {
+                            #[allow(clippy::indexing_slicing)]
+                            let remaining = &bytes[idx..];
 
-                        if remaining.len() >= crlf_pat.len() {
-                            if remaining.starts_with(&crlf_pat) {
-                                bytes.truncate(idx);
-                                y.yield_one(bytes);
-                                return None;
+                            if remaining.len() >= crlf_pat.len() {
+                                if remaining.starts_with(&crlf_pat) {
+                                    bytes.truncate(idx);
+                                    y.yield_ok(bytes).await;
+                                    return Ok(());
+                                } else {
+                                    continue;
+                                }
+                            } else if crlf_pat.starts_with(remaining) {
+                                y.yield_ok(bytes.split_to(idx)).await;
+                                buf.extend_from_slice(&*bytes);
+                                bytes.clear();
+                                state = 3;
+                                continue 'dfa;
                             } else {
                                 continue;
                             }
-                        } else if crlf_pat.starts_with(remaining) {
-                            pat_idx = remaining.len();
-                            bytes_idx = idx;
-                        } else {
-                            continue;
                         }
+
+                        y.yield_ok(mem::take(&mut bytes)).await;
+                        state = 1;
+                        continue 'dfa;
                     }
-                    if pat_idx > 0 {
-                        prev_block = Some(bytes.slice(..bytes_idx));
-                    } else {
-                        y.yield_one(bytes);
-                    }
-                    Some(())
-                };
-                if push_bytes(prev_bytes).is_some() {
-                    loop {
-                        let bytes = match body.as_mut().next().await {
+                    3 => {
+                        match body.as_mut().next().await {
                             None => return Err(FileStreamError::Incomplete),
                             Some(Err(e)) => return Err(FileStreamError::Io(e)),
-                            Some(Ok(b)) => b,
+                            Some(Ok(b)) => buf.extend_from_slice(&*b),
                         };
-                        if push_bytes(bytes).is_none() {
-                            break;
-                        }
+                        bytes = Bytes::from(mem::take(&mut buf));
+                        state = 2;
+                        continue 'dfa;
                     }
+                    #[allow(clippy::unreachable)]
+                    _ => unreachable!(),
                 }
-                while let Some(ret) = body.as_mut().next().await {
-                    if let Err(e) = ret {
-                        return Err(FileStreamError::Io(e));
-                    }
-                }
-                Ok(())
-            })
-        })
-        .apply(|inner| Self { inner })
+            }
+        }
+
+        // `\r\n--{boundary}`
+        let crlf_pat: Box<[u8]> = Vec::new()
+            .also(|v| v.extend_from_slice(b"\r\n--"))
+            .also(|v| v.extend_from_slice(boundary))
+            .into();
+
+        Self {
+            inner: AsyncTryStream::new(
+                |y| -> SyncBoxFuture<'static, Result<(), FileStreamError>> {
+                    Box::pin(gen(y, body, crlf_pat, prev_bytes))
+                },
+            ),
+        }
     }
 }
 
@@ -332,20 +376,16 @@ impl<'a> CrlfLines<'a> {
             if idx == 0 {
                 continue;
             }
-            let byte = *self
-                .slice
-                .get(idx.wrapping_sub(1))
-                .unwrap_or_else(|| unreachable!());
+
+            #[allow(clippy::indexing_slicing)]
+            let byte = self.slice[idx.wrapping_sub(1)];
 
             if byte == b'\r' {
-                let left = self
-                    .slice
-                    .get(..idx.wrapping_sub(1))
-                    .unwrap_or_else(|| unreachable!());
-                let right = self
-                    .slice
-                    .get(idx.wrapping_add(1)..)
-                    .unwrap_or_else(|| unreachable!());
+                #[allow(clippy::indexing_slicing)]
+                let left = &self.slice[..idx.wrapping_sub(1)];
+
+                #[allow(clippy::indexing_slicing)]
+                let right = &self.slice[idx.wrapping_add(1)..];
 
                 self.slice = right;
                 return Some(left);
@@ -366,7 +406,10 @@ impl<'a> CrlfLines<'a> {
             let line = lines.next_line()?;
             if line == line_pat {
                 len = len.min(self.slice.len());
-                let ans = self.slice.get(..len).unwrap_or_else(|| unreachable!());
+
+                #[allow(clippy::indexing_slicing)]
+                let ans = &self.slice[..len];
+
                 self.slice = lines.slice;
                 return Some(ans);
             } else {
@@ -418,6 +461,11 @@ fn parse_content_disposition(input: &[u8]) -> nom::IResult<&[u8], ContentDisposi
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::utils::Apply;
+
+    use std::slice;
+
     use bytes::BytesMut;
 
     async fn aggregate_file_stream(mut file_stream: FileStream) -> Result<Bytes, FileStreamError> {
@@ -455,6 +503,32 @@ mod tests {
 
         let mut lines = CrlfLines { slice: bytes };
         assert_eq!(lines.split_to(b"xxx"), None);
+    }
+
+    #[tokio::test]
+    async fn file_stream() {
+        let file_content = "\r\n too much crlf \r\n--\r\n\r\n\r\n";
+
+        let body =
+            b"\n too much crlf \r\n--\r\n\r\n\r\n\r\n----an-invalid-\r\n--boundary--droped-data";
+
+        let body_bytes = body
+            .iter()
+            .map(|b| Bytes::from(slice::from_ref(b)).apply(Ok))
+            .collect::<Vec<io::Result<Bytes>>>();
+
+        let body_stream = futures::stream::iter(body_bytes);
+
+        let boundary = b"--an-invalid-\r\n--boundary--";
+
+        let file_stream = FileStream::new(
+            Box::pin(body_stream),
+            boundary,
+            Some(Bytes::copy_from_slice(b"\r")),
+        );
+
+        let file_bytes = aggregate_file_stream(file_stream).await.unwrap();
+        assert_eq!(file_bytes, file_content);
     }
 
     #[tokio::test]

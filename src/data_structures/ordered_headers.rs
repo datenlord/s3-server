@@ -2,6 +2,8 @@
 
 use crate::Request;
 
+use std::str::FromStr;
+
 use hyper::header::{AsHeaderName, ToStrError};
 use smallvec::SmallVec;
 
@@ -61,6 +63,26 @@ impl<'a> OrderedHeaders<'a> {
         };
         drop(name);
         ans
+    }
+
+    /// assign from optional header
+    pub fn assign<T: FromStr>(
+        &self,
+        name: impl AsHeaderName,
+        opt: &mut Option<T>,
+    ) -> Result<(), T::Err> {
+        if let Some(s) = self.get(name) {
+            let v = s.parse()?;
+            *opt = Some(v)
+        }
+        Ok(())
+    }
+
+    /// assign string from optional header
+    pub fn assign_str(&self, name: impl AsHeaderName, opt: &mut Option<String>) {
+        if let Some(s) = self.get(name) {
+            *opt = Some(s.to_owned())
+        }
     }
 }
 

@@ -1,12 +1,13 @@
 use s3_server::path::S3Path;
 
-use anyhow::{Context, Result};
-use hyper::{header, Body};
-use mime::Mime;
 use std::env;
 use std::fs;
 use std::mem;
 use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result};
+use hyper::{header, Body};
+use mime::Mime;
 
 pub type Request = hyper::Request<Body>;
 pub type Response = hyper::Response<Body>;

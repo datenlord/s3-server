@@ -56,58 +56,58 @@ pub enum S3PathErrorKind {
     KeyTooLong,
 }
 
-/// See [bucket nameing rules](https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules)
-#[must_use]
-pub fn check_bucket_name(name: &str) -> bool {
-    if !(3_usize..64).contains(&name.len()) {
-        return false;
-    }
-
-    if !name
-        .as_bytes()
-        .iter()
-        .all(|&b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-')
-    {
-        return false;
-    }
-
-    if name
-        .as_bytes()
-        .first()
-        .map(|&b| b.is_ascii_lowercase() || b.is_ascii_digit())
-        != Some(true)
-    {
-        return false;
-    }
-
-    if name
-        .as_bytes()
-        .last()
-        .map(|&b| b.is_ascii_lowercase() || b.is_ascii_digit())
-        != Some(true)
-    {
-        return false;
-    }
-
-    if name.parse::<IpAddr>().is_ok() {
-        return false;
-    }
-
-    if name.starts_with("xn--") {
-        return false;
-    }
-
-    true
-}
-
-/// The name for a key is a sequence of Unicode characters whose UTF-8 encoding is at most 1,024 bytes long.
-/// See [object keys](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-keys)
-#[must_use]
-pub const fn check_key(key: &str) -> bool {
-    key.len() <= 1024
-}
-
 impl<'a> S3Path<'a> {
+    /// See [bucket nameing rules](https://docs.aws.amazon.com/AmazonS3/latest/dev/BucketRestrictions.html#bucketnamingrules)
+    #[must_use]
+    pub fn check_bucket_name(name: &str) -> bool {
+        if !(3_usize..64).contains(&name.len()) {
+            return false;
+        }
+
+        if !name
+            .as_bytes()
+            .iter()
+            .all(|&b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'.' || b == b'-')
+        {
+            return false;
+        }
+
+        if name
+            .as_bytes()
+            .first()
+            .map(|&b| b.is_ascii_lowercase() || b.is_ascii_digit())
+            != Some(true)
+        {
+            return false;
+        }
+
+        if name
+            .as_bytes()
+            .last()
+            .map(|&b| b.is_ascii_lowercase() || b.is_ascii_digit())
+            != Some(true)
+        {
+            return false;
+        }
+
+        if name.parse::<IpAddr>().is_ok() {
+            return false;
+        }
+
+        if name.starts_with("xn--") {
+            return false;
+        }
+
+        true
+    }
+
+    /// The name for a key is a sequence of Unicode characters whose UTF-8 encoding is at most 1,024 bytes long.
+    /// See [object keys](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingMetadata.html#object-keys)
+    #[must_use]
+    pub const fn check_key(key: &str) -> bool {
+        key.len() <= 1024
+    }
+
     /// Parse a path-style request
     /// # Errors
     /// Returns an `Err` if the s3 path is invalid
@@ -133,7 +133,7 @@ impl<'a> S3Path<'a> {
             Some(s) => s,
         };
 
-        if !check_bucket_name(bucket) {
+        if !Self::check_bucket_name(bucket) {
             return Err(ParseS3PathError {
                 kind: S3PathErrorKind::InvalidBucketName,
             });
@@ -143,16 +143,35 @@ impl<'a> S3Path<'a> {
             None | Some("") => return Ok(S3Path::Bucket { bucket }),
 
             // here can not panic, because `split` ensures `path` has enough length
-            Some(_) => path.get(bucket.len().saturating_add(2)..).unwrap(),
+            #[allow(clippy::indexing_slicing)]
+            Some(_) => &path[bucket.len().saturating_add(2)..],
         };
 
-        if !check_key(key) {
+        if !Self::check_key(key) {
             return Err(ParseS3PathError {
                 kind: S3PathErrorKind::KeyTooLong,
             });
         }
 
         Ok(Self::Object { bucket, key })
+    }
+
+    /// is root
+    #[must_use]
+    pub const fn is_root(&self) -> bool {
+        matches!(*self, Self::Root)
+    }
+
+    /// is bucket
+    #[must_use]
+    pub const fn is_bucket(&self) -> bool {
+        matches!(*self, Self::Bucket{..})
+    }
+
+    /// is object
+    #[must_use]
+    pub const fn is_object(&self) -> bool {
+        matches!(*self, Self::Object{..})
     }
 }
 

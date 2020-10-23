@@ -4,15 +4,18 @@ mod common;
 
 use common::Request;
 
-use s3_server::fs::TokioFileSystem as FileSystem;
-use s3_server::headers::names::X_AMZ_CONTENT_SHA256;
-use s3_server::{path::S3Path, S3Service};
+use s3_server::headers::X_AMZ_CONTENT_SHA256;
+use s3_server::path::S3Path;
+use s3_server::storages::fs::FileSystem;
+use s3_server::S3Service;
+
+use std::io;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, StatusCode};
-use std::io;
-use std::path::{Path, PathBuf};
+
 use tokio::fs;
 
 fn setup_service() -> Result<(PathBuf, S3Service)> {
