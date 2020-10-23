@@ -1,20 +1,43 @@
 //! [`ListBuckets`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListBuckets.html)
 
-use crate::error::S3Result;
-use crate::output::{wrap_output, S3Output};
-use crate::utils::{ResponseExt, XmlWriterExt};
-use crate::{BoxStdError, Response};
+use super::{wrap_internal_error, ReqContext, S3Handler};
 
 use crate::dto::{ListBucketsError, ListBucketsOutput, ListBucketsRequest};
+use crate::errors::{S3Error, S3Result};
+use crate::output::S3Output;
+use crate::storage::S3Storage;
+use crate::utils::{ResponseExt, XmlWriterExt};
+use crate::{async_trait, Method, Response};
+
+/// `ListBuckets` handler
+pub struct Handler;
+
+#[async_trait]
+impl S3Handler for Handler {
+    fn is_match(&self, ctx: &'_ ReqContext<'_>) -> bool {
+        bool_try!(ctx.req.method() == Method::GET);
+        ctx.path.is_root()
+    }
+
+    async fn handle(
+        &self,
+        ctx: &mut ReqContext<'_>,
+        storage: &(dyn S3Storage + Send + Sync),
+    ) -> S3Result<Response> {
+        let input = extract(ctx)?;
+        let output = storage.list_buckets(input).await;
+        output.try_into_response()
+    }
+}
 
 /// extract operation request
-pub fn extract() -> Result<ListBucketsRequest, BoxStdError> {
+fn extract(_: &mut ReqContext<'_>) -> S3Result<ListBucketsRequest> {
     Ok(ListBucketsRequest)
 }
 
 impl S3Output for ListBucketsOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|res| {
+        wrap_internal_error(|res| {
             res.set_xml_body(4096, |w| {
                 w.stack("ListBucketsOutput", |w| {
                     w.opt_stack("Buckets", self.buckets, |w, buckets| {
@@ -38,8 +61,8 @@ impl S3Output for ListBucketsOutput {
     }
 }
 
-impl S3Output for ListBucketsError {
-    fn try_into_response(self) -> S3Result<Response> {
-        match self {}
+impl From<ListBucketsError> for S3Error {
+    fn from(e: ListBucketsError) -> Self {
+        match e {}
     }
 }

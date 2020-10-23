@@ -1,39 +1,87 @@
 //! [`CompleteMultipartUpload`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html)
 
-use crate::{
-    dto::{
-        CompleteMultipartUploadError, CompleteMultipartUploadOutput,
-        CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
-    },
-    headers::names::{
-        X_AMZ_EXPIRATION, X_AMZ_REQUEST_CHARGED, X_AMZ_REQUEST_PAYER, X_AMZ_SERVER_SIDE_ENCRYPTION,
-        X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID, X_AMZ_VERSION_ID,
-    },
-    output::wrap_output,
-    utils::{deserialize_xml_body, RequestExt, ResponseExt, XmlWriterExt},
-    Body, BoxStdError, Request, Response, S3Output, S3Result,
-};
+use super::{wrap_internal_error, ReqContext, S3Handler};
 
-impl S3Output for CompleteMultipartUploadError {
-    fn try_into_response(self) -> S3Result<Response> {
-        match self {}
+use crate::dto::{
+    CompleteMultipartUploadError, CompleteMultipartUploadOutput, CompleteMultipartUploadRequest,
+    CompletedMultipartUpload, CompletedPart,
+};
+use crate::errors::{S3Error, S3Result};
+use crate::headers::{
+    X_AMZ_EXPIRATION, X_AMZ_REQUEST_CHARGED, X_AMZ_REQUEST_PAYER, X_AMZ_SERVER_SIDE_ENCRYPTION,
+    X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID, X_AMZ_VERSION_ID,
+};
+use crate::output::S3Output;
+use crate::storage::S3Storage;
+use crate::utils::{deserialize_xml_body, ResponseExt, XmlWriterExt};
+use crate::{async_trait, Response};
+
+use hyper::Method;
+
+/// `CompleteMultipartUpload` handler
+pub struct Handler;
+
+#[async_trait]
+impl S3Handler for Handler {
+    fn is_match(&self, ctx: &'_ ReqContext<'_>) -> bool {
+        bool_try!(ctx.req.method() == Method::POST);
+        bool_try!(ctx.path.is_object());
+        let qs = bool_try_some!(ctx.query_strings.as_ref());
+        qs.get("uploadId").is_some()
+    }
+
+    async fn handle(
+        &self,
+        ctx: &mut ReqContext<'_>,
+        storage: &(dyn S3Storage + Send + Sync),
+    ) -> S3Result<Response> {
+        let input = extract(ctx).await?;
+        let output = storage.complete_multipart_upload(input).await;
+        output.try_into_response()
+    }
+}
+
+/// extract operation request
+async fn extract(ctx: &mut ReqContext<'_>) -> S3Result<CompleteMultipartUploadRequest> {
+    let multipart_upload: Option<self::xml::CompletedMultipartUpload> =
+        deserialize_xml_body(ctx.take_body())
+            .await
+            .map_err(|err| invalid_request!("Invalid xml format", err))?;
+
+    let (bucket, key) = ctx.unwrap_object_path();
+    let upload_id = ctx.unwrap_qs("uploadId").to_owned();
+
+    let mut input = CompleteMultipartUploadRequest {
+        bucket: bucket.into(),
+        key: key.into(),
+        upload_id,
+        multipart_upload: multipart_upload.map(Into::into),
+        ..CompleteMultipartUploadRequest::default()
+    };
+
+    let h = &ctx.headers;
+    h.assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
+
+    Ok(input)
+}
+
+impl From<CompleteMultipartUploadError> for S3Error {
+    fn from(err: CompleteMultipartUploadError) -> Self {
+        match err {}
     }
 }
 
 impl S3Output for CompleteMultipartUploadOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|res| {
-            res.set_optional_header(|| X_AMZ_EXPIRATION.clone(), self.expiration)?;
+        wrap_internal_error(|res| {
+            res.set_optional_header(&*X_AMZ_EXPIRATION, self.expiration)?;
+            res.set_optional_header(&*X_AMZ_SERVER_SIDE_ENCRYPTION, self.server_side_encryption)?;
+            res.set_optional_header(&*X_AMZ_VERSION_ID, self.version_id)?;
             res.set_optional_header(
-                || X_AMZ_SERVER_SIDE_ENCRYPTION.clone(),
-                self.server_side_encryption,
-            )?;
-            res.set_optional_header(|| X_AMZ_VERSION_ID.clone(), self.version_id)?;
-            res.set_optional_header(
-                || X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID.clone(),
+                &*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
                 self.ssekms_key_id,
             )?;
-            res.set_optional_header(|| X_AMZ_REQUEST_CHARGED.clone(), self.request_charged)?;
+            res.set_optional_header(&*X_AMZ_REQUEST_CHARGED, self.request_charged)?;
 
             let location = self.location;
             let bucket = self.bucket;
@@ -94,28 +142,4 @@ mod xml {
             }
         }
     }
-}
-
-/// extract operation request
-pub async fn extract(
-    req: &Request,
-    body: Body,
-    bucket: &str,
-    key: &str,
-    upload_id: String,
-) -> Result<CompleteMultipartUploadRequest, BoxStdError> {
-    let multipart_upload: Option<self::xml::CompletedMultipartUpload> =
-        deserialize_xml_body(body).await?;
-
-    let mut input = CompleteMultipartUploadRequest {
-        bucket: bucket.into(),
-        key: key.into(),
-        upload_id,
-        multipart_upload: multipart_upload.map(Into::into),
-        ..CompleteMultipartUploadRequest::default()
-    };
-
-    req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
-
-    Ok(input)
 }

@@ -16,8 +16,9 @@
 //!         --secret-key <secret-key>
 //! ```
 
+use s3_server::storages::fs::FileSystem;
 use s3_server::S3Service;
-use s3_server::{fs::TokioFileSystem as FileSystem, SimpleAuth};
+use s3_server::SimpleAuth;
 
 use std::net::TcpListener;
 use std::path::PathBuf;
@@ -56,9 +57,7 @@ async fn main() -> Result<()> {
     let args: Args = Args::from_args();
 
     // setup the storage
-    let mut fs = FileSystem::new(&args.fs_root)?;
-    fs.set_storage_class_validator(|s| ["STANDARD", "REDUCED_REDUNDANCY"].contains(&s));
-
+    let fs = FileSystem::new(&args.fs_root)?;
     debug!(?fs);
 
     // setup the service

@@ -1,10 +1,15 @@
 //! crypto utils
 
+use crate::utils::Also;
+
 use bytes::Bytes;
 use hmac::{Hmac, Mac, NewMac};
 use sha2::{Digest, Sha256};
 
-use crate::utils::Also;
+/// convert bytes to hex string
+pub fn to_hex_string(src: impl AsRef<[u8]>) -> String {
+    faster_hex::hex_string(src.as_ref()).unwrap_or_else(|e| panic!("{}", e))
+}
 
 /// verify sha256 checksum string
 pub fn is_sha256_checksum(s: &str) -> bool {
@@ -19,8 +24,7 @@ pub fn hex_sha256(data: &[u8]) -> String {
     #[cfg(test)]
     debug_assert!(src.as_slice().len() == 32);
 
-    // a sha256 hash string's length is always 64
-    faster_hex::hex_string(src.as_ref()).unwrap_or_else(|_| unreachable!())
+    to_hex_string(src)
 }
 
 /// `hex(sha256(chunks))`
@@ -32,14 +36,13 @@ pub fn hex_sha256_chunk(chunk_data: &[Bytes]) -> String {
     #[cfg(test)]
     debug_assert!(src.as_slice().len() == 32);
 
-    // a sha256 hash string's length is always 64
-    faster_hex::hex_string(src.as_ref()).unwrap_or_else(|_| unreachable!())
+    to_hex_string(src)
 }
 
 /// `hmac_sha256(key, data)`
 pub fn hmac_sha256(key: &[u8], data: &[u8]) -> impl AsRef<[u8]> {
-    // HMAC can take key of any size
-    let m = <Hmac<Sha256>>::new_varkey(key).unwrap_or_else(|_| unreachable!());
+    let m =
+        <Hmac<Sha256>>::new_varkey(key).unwrap_or_else(|_| panic!("HMAC can take key of any size"));
     m.also(|m| m.update(data.as_ref())).finalize().into_bytes()
 }
 
@@ -50,8 +53,7 @@ pub fn hex_hmac_sha256(key: &[u8], data: &[u8]) -> String {
     #[cfg(test)]
     debug_assert!(src.as_ref().len() == 32);
 
-    // a hmac sha256 hash string's length is always 64
-    faster_hex::hex_string(src.as_ref()).unwrap_or_else(|_| unreachable!())
+    to_hex_string(src)
 }
 
 /// is base64 encoded

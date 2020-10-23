@@ -1,12 +1,10 @@
 //! response util
 
-use crate::{BoxStdError, Response};
-use hyper::{
-    header::{self, HeaderName, HeaderValue, InvalidHeaderValue},
-    Body, StatusCode,
-};
-use mime::Mime;
+use crate::{Body, BoxStdError, Mime, Response, StatusCode};
+
 use std::{collections::HashMap, convert::TryFrom};
+
+use hyper::header::{self, HeaderName, HeaderValue, InvalidHeaderValue};
 use xml::{common::XmlVersion, writer::XmlEvent, EventWriter};
 
 /// `ResponseExt`
@@ -17,7 +15,7 @@ pub trait ResponseExt {
     /// set optional header
     fn set_optional_header(
         &mut self,
-        name: impl FnOnce() -> HeaderName,
+        name: impl HeaderExt,
         value: Option<String>,
     ) -> Result<(), InvalidHeaderValue>;
 
@@ -48,12 +46,12 @@ impl ResponseExt for Response {
 
     fn set_optional_header(
         &mut self,
-        name: impl FnOnce() -> HeaderName,
+        name: impl HeaderExt,
         value: Option<String>,
     ) -> Result<(), InvalidHeaderValue> {
         if let Some(value) = value {
             let val = HeaderValue::try_from(value)?;
-            let _ = self.headers_mut().insert(name(), val);
+            let _ = self.headers_mut().insert(name.into_owned_name(), val);
         }
         Ok(())
     }
@@ -101,5 +99,23 @@ impl ResponseExt for Response {
             let _ = headers.insert(header_name, header_value);
         }
         Ok(())
+    }
+}
+
+/// header ext
+pub trait HeaderExt {
+    /// into owned name
+    fn into_owned_name(self) -> HeaderName;
+}
+
+impl HeaderExt for &'_ HeaderName {
+    fn into_owned_name(self) -> HeaderName {
+        self.clone()
+    }
+}
+
+impl HeaderExt for HeaderName {
+    fn into_owned_name(self) -> HeaderName {
+        self
     }
 }

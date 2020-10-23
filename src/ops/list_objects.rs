@@ -1,53 +1,67 @@
 //! [`ListObjects`](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjects.html)
 
-use crate::error::{S3Result, XmlErrorResponse};
-use crate::error_code::S3ErrorCode;
-use crate::headers::names::X_AMZ_REQUEST_PAYER;
-use crate::output::{wrap_output, S3Output};
-use crate::query::GetQuery;
-use crate::utils::{RequestExt, ResponseExt, XmlWriterExt};
-use crate::{BoxStdError, Request, Response};
+use super::{wrap_internal_error, ReqContext, S3Handler};
 
 use crate::dto::{ListObjectsError, ListObjectsOutput, ListObjectsRequest};
+use crate::errors::{S3Error, S3ErrorCode, S3Result};
+use crate::headers::X_AMZ_REQUEST_PAYER;
+use crate::output::S3Output;
+use crate::storage::S3Storage;
+use crate::utils::{ResponseExt, XmlWriterExt};
+use crate::{async_trait, Method, Response};
+
+/// `ListObjects` handler
+pub struct Handler;
+
+#[async_trait]
+impl S3Handler for Handler {
+    fn is_match(&self, ctx: &'_ ReqContext<'_>) -> bool {
+        bool_try!(ctx.req.method() == Method::GET);
+        bool_try!(ctx.path.is_bucket());
+        match ctx.query_strings {
+            None => true,
+            Some(ref qs) => qs.get("list-type").is_none(),
+        }
+    }
+
+    async fn handle(
+        &self,
+        ctx: &mut ReqContext<'_>,
+        storage: &(dyn S3Storage + Send + Sync),
+    ) -> S3Result<Response> {
+        let input = extract(ctx)?;
+        let output = storage.list_objects(input).await;
+        output.try_into_response()
+    }
+}
 
 /// extract operation request
-pub fn extract(
-    req: &Request,
-    query: Option<GetQuery>,
-    bucket: &str,
-) -> Result<ListObjectsRequest, BoxStdError> {
+fn extract(ctx: &mut ReqContext<'_>) -> S3Result<ListObjectsRequest> {
+    let bucket = ctx.unwrap_bucket_path();
+
     let mut input = ListObjectsRequest {
         bucket: bucket.into(),
         ..ListObjectsRequest::default()
     };
 
-    if let Some(query) = query {
-        input.delimiter = query.delimiter;
-        input.encoding_type = query.encoding_type;
-        input.marker = query.marker;
-        input.max_keys = query.max_keys;
-        input.prefix = query.prefix;
+    if let Some(ref q) = ctx.query_strings {
+        q.assign_str("delimiter", &mut input.delimiter);
+        q.assign_str("encoding-type", &mut input.encoding_type);
+        q.assign_str("marker", &mut input.marker);
+        q.assign("max-keys", &mut input.max_keys)
+            .map_err(|err| invalid_request!("Invalid query: max-keys", err))?;
+        q.assign_str("prefix", &mut input.prefix);
     }
 
-    req.assign_from_optional_header(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer)?;
+    ctx.headers
+        .assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
 
     Ok(input)
 }
 
-impl S3Output for ListObjectsError {
-    fn try_into_response(self) -> S3Result<Response> {
-        let resp = match self {
-            Self::NoSuchBucket(msg) => {
-                XmlErrorResponse::from_code_msg(S3ErrorCode::NoSuchBucket, msg)
-            }
-        };
-        resp.try_into_response()
-    }
-}
-
 impl S3Output for ListObjectsOutput {
     fn try_into_response(self) -> S3Result<Response> {
-        wrap_output(|res| {
+        wrap_internal_error(|res| {
             res.set_xml_body(4096, |w| {
                 w.stack("ListBucketResult", |w| {
                     w.opt_element("IsTruncated", self.is_truncated.map(|b| b.to_string()))?;
@@ -83,5 +97,13 @@ impl S3Output for ListObjectsOutput {
                 })
             })
         })
+    }
+}
+
+impl From<ListObjectsError> for S3Error {
+    fn from(e: ListObjectsError) -> Self {
+        match e {
+            ListObjectsError::NoSuchBucket(msg) => Self::new(S3ErrorCode::NoSuchBucket, msg),
+        }
     }
 }

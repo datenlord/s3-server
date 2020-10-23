@@ -1,7 +1,212 @@
-//! S3 error code
+//! S3 errors
 
-use hyper::StatusCode;
-use std::fmt::{self, Display};
+use crate::utils::Apply;
+use crate::{BoxStdError, StatusCode};
+
+use std::error::Error;
+use std::fmt::{self, Debug, Display};
+
+use backtrace::Backtrace;
+use tracing_error::SpanTrace;
+
+/// Type representing an error response
+pub(crate) struct XmlErrorResponse {
+    /// code
+    pub(crate) code: S3ErrorCode,
+    /// message
+    pub(crate) message: Option<String>,
+    // resource: Option<String>, // unimplemented
+    // request_id: Option<String>, // unimplemented
+}
+
+/// `S3ErrorInner`
+#[derive(Debug)]
+struct S3ErrorInner {
+    /// code
+    code: S3ErrorCode,
+    /// message
+    message: Option<String>,
+    /// error source
+    source: Option<BoxStdError>,
+    /// span trace
+    span_trace: Option<SpanTrace>,
+    /// stack trace
+    backtrace: Option<Backtrace>,
+    // resource: Option<String>, // unimplemented
+    // request_id: Option<String>, // unimplemented
+}
+
+// `S3Error` uses `Box` to avoid moving too much bytes.
+// It's ok to allocate for error reports.
+
+/// S3 error
+pub struct S3Error(Box<S3ErrorInner>);
+
+/// S3 result
+pub type S3Result<T> = Result<T, S3Error>;
+
+impl Debug for S3Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <S3ErrorInner as Debug>::fmt(&self.0, f)
+    }
+}
+
+impl Display for S3Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "S3Error: code: {}", self.0.code)?;
+        if let Some(ref msg) = self.0.message {
+            write!(f, ", message: {}", msg)?;
+        }
+        if let Some(ref source) = self.0.source {
+            write!(f, "\nsource: {}", source)?;
+        }
+        if let Some(ref span_trace) = self.0.span_trace {
+            write!(f, "\nspan trace: {}", span_trace)?;
+        }
+        Ok(())
+    }
+}
+
+impl Error for S3Error {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.0.source.as_deref()?)
+    }
+}
+
+impl S3Error {
+    /// Constructs an `S3Error` with code and message
+    pub fn new(code: S3ErrorCode, message: impl Into<String>) -> Self {
+        Self::from_code(code).message(message).finish()
+    }
+
+    /// Start building an `S3Error`
+    #[must_use]
+    pub fn from_code(code: S3ErrorCode) -> S3ErrorBuilder {
+        S3ErrorInner {
+            code,
+            message: None,
+            source: None,
+            span_trace: None,
+            backtrace: None,
+        }
+        .apply(|e| S3ErrorBuilder(Box::new(e)))
+    }
+
+    /// consume the error and return an xml response
+    pub(crate) fn into_xml_response(self) -> XmlErrorResponse {
+        XmlErrorResponse {
+            code: self.0.code,
+            message: self.0.message,
+        }
+    }
+}
+
+/// The builder of `S3Error`
+#[derive(Debug)]
+pub struct S3ErrorBuilder(Box<S3ErrorInner>);
+
+impl S3ErrorBuilder {
+    /// set message
+    #[inline]
+    pub fn message(mut self, msg: impl Into<String>) -> Self {
+        self.0.message = Some(msg.into());
+        self
+    }
+
+    /// set error source
+    #[inline]
+    pub fn source(mut self, e: impl Into<BoxStdError>) -> Self {
+        self.0.source = Some(e.into());
+        self
+    }
+
+    /// capture span trace
+    #[inline]
+    #[must_use]
+    pub fn capture_span_trace(mut self) -> Self {
+        self.0.span_trace = Some(SpanTrace::capture());
+        self
+    }
+
+    /// capture backtrace
+    #[inline]
+    #[must_use]
+    pub fn capture_backtrace(mut self) -> Self {
+        self.0.backtrace = Some(Backtrace::new());
+        self
+    }
+
+    /// finish the builder
+    #[allow(clippy::missing_const_for_fn)] // FIXME: See <https://github.com/rust-lang/rust/issues/73255>
+    #[inline]
+    #[must_use]
+    pub fn finish(self) -> S3Error {
+        S3Error(self.0)
+    }
+}
+
+/// Generic s3 error type for storage
+#[derive(Debug)]
+pub enum S3StorageError<E> {
+    /// A operation-specific error occurred
+    Operation(E),
+    /// Other errors
+    Other(S3Error),
+}
+
+impl<E: Debug> Display for S3StorageError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <Self as Debug>::fmt(self, f)
+    }
+}
+
+impl<E: Error + 'static> Error for S3StorageError<E> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match *self {
+            Self::Operation(ref e) => Some(e),
+            Self::Other(ref e) => Some(e),
+        }
+    }
+}
+
+impl<E> From<S3Error> for S3StorageError<E> {
+    fn from(e: S3Error) -> Self {
+        Self::Other(e)
+    }
+}
+
+/// Result carrying a generic `S3StorageError<E>`
+pub type S3StorageResult<T, E> = Result<T, S3StorageError<E>>;
+
+/// S3 error type for auth
+#[derive(Debug)]
+pub enum S3AuthError {
+    /// Not signed up
+    NotSignedUp,
+    /// Other errors
+    Other(S3Error),
+}
+
+impl Display for S3AuthError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        <Self as Debug>::fmt(self, f)
+    }
+}
+
+impl Error for S3AuthError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match *self {
+            Self::NotSignedUp => None,
+            Self::Other(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<S3Error> for S3AuthError {
+    fn from(e: S3Error) -> Self {
+        Self::Other(e)
+    }
+}
 
 /// S3 error code enum
 ///
@@ -209,6 +414,9 @@ pub enum S3ErrorCode {
     /// Your account is not signed up for the Amazon S3 service. You must sign up before you can use Amazon S3.
     NotSignedUp,
 
+    /// [Custom error code]
+    NotSupported,
+
     /// The source object of the COPY operation is not in the active tier and is only stored in Amazon S3 Glacier.
     ObjectNotInActiveTierError,
 
@@ -349,6 +557,7 @@ impl S3ErrorCode {
             Self::NoSuchVersion => Some(StatusCode::NOT_FOUND),
             Self::NotImplemented => Some(StatusCode::NOT_IMPLEMENTED),
             Self::NotSignedUp => Some(StatusCode::FORBIDDEN),
+            Self::NotSupported => None,
             Self::ObjectNotInActiveTierError => Some(StatusCode::OK),
             Self::OperationAborted => Some(StatusCode::CONFLICT),
             Self::PermanentRedirect => Some(StatusCode::MOVED_PERMANENTLY),
@@ -450,6 +659,7 @@ impl S3ErrorCode {
             NoSuchVersion,
             NotImplemented,
             NotSignedUp,
+            NotSupported,
             ObjectNotInActiveTierError,
             OperationAborted,
             PermanentRedirect,

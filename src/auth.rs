@@ -1,6 +1,6 @@
 //! S3 Authentication
 
-use crate::error::S3Result;
+use crate::errors::S3AuthError;
 
 use std::collections::HashMap;
 
@@ -10,7 +10,7 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait S3Auth {
     /// lookup `secret_access_key` by `access_key_id`
-    async fn get_secret_access_key(&self, access_key_id: &str) -> S3Result<Option<String>>;
+    async fn get_secret_access_key(&self, access_key_id: &str) -> Result<String, S3AuthError>;
 }
 
 /// A simple authentication provider
@@ -43,10 +43,10 @@ impl SimpleAuth {
 
 #[async_trait]
 impl S3Auth for SimpleAuth {
-    async fn get_secret_access_key(&self, access_key_id: &str) -> S3Result<Option<String>> {
+    async fn get_secret_access_key(&self, access_key_id: &str) -> Result<String, S3AuthError> {
         match self.lookup(access_key_id) {
-            None => Ok(None),
-            Some(s) => Ok(Some(s.to_owned())),
+            None => Err(S3AuthError::NotSignedUp),
+            Some(s) => Ok(s.to_owned()),
         }
     }
 }

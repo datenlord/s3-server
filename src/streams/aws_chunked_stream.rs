@@ -1,23 +1,31 @@
 //! aws-chunked stream
 
-use crate::utils::async_stream::AsyncTryStream;
-use crate::{headers::AmzDate, signature_v4, utils::Apply};
+use crate::headers::AmzDate;
+use crate::signature_v4;
+use crate::utils::Apply;
 
 use std::convert::TryInto;
+use std::fmt::{self, Debug};
 use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use bytes::{Buf, Bytes};
 use futures::pin_mut;
-use futures::stream::Stream;
-use futures::stream::StreamExt;
+use futures::stream::{Stream, StreamExt};
 use memchr::memchr;
+use transform_stream::AsyncTryStream;
 
-/// Chunked stream
-pub struct ChunkedStream {
+/// Aws chunked stream
+pub struct AwsChunkedStream {
     /// inner
-    inner: AsyncTryStream<Bytes, ChunkedStreamError>,
+    inner: AsyncTryStream<Bytes, AwsChunkedStreamError>,
+}
+
+impl Debug for AwsChunkedStream {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "AwsChunkedStream {{...}}")
+    }
 }
 
 /// signature ctx
@@ -37,19 +45,19 @@ struct SignatureCtx {
 }
 
 #[derive(Debug, thiserror::Error)]
-/// `ChunkedStreamError`
-pub enum ChunkedStreamError {
+/// `AwsChunkedStreamError`
+pub enum AwsChunkedStreamError {
     /// IO error
-    #[error("ChunkedStreamError: IO: {}",.0)]
+    #[error("AwsChunkedStreamError: IO: {}",.0)]
     Io(io::Error),
     /// Signature mismatch
-    #[error("ChunkedStreamError: SignatureMismatch")]
+    #[error("AwsChunkedStreamError: SignatureMismatch")]
     SignatureMismatch,
     /// Format error
-    #[error("ChunkedStreamError: FormatError")]
+    #[error("AwsChunkedStreamError: FormatError")]
     FormatError,
     /// Incomplete stream
-    #[error("ChunkedStreamError: Incomplete")]
+    #[error("AwsChunkedStreamError: Incomplete")]
     Incomplete,
 }
 
@@ -114,7 +122,7 @@ fn check_signature(
     }
 }
 
-impl ChunkedStream {
+impl AwsChunkedStream {
     /// Constructs a `ChunkedStream`
     pub fn new<S>(
         body: S,
@@ -126,64 +134,55 @@ impl ChunkedStream {
     where
         S: Stream<Item = io::Result<Bytes>> + Send + 'static,
     {
-        let inner = <AsyncTryStream<Bytes, ChunkedStreamError>>::new(|mut y| {
-            Box::pin(async move {
-                pin_mut!(body);
-                let mut prev_bytes = Bytes::new();
-                let mut buf: Vec<u8> = Vec::new();
-                let mut ctx = SignatureCtx {
-                    amz_date,
-                    region,
-                    secret_key,
-                    prev_signature: seed_signature,
+        <AsyncTryStream<Bytes, AwsChunkedStreamError>>::new_boxed(|mut y| async move {
+            pin_mut!(body);
+            let mut prev_bytes = Bytes::new();
+            let mut buf: Vec<u8> = Vec::new();
+            let mut ctx = SignatureCtx {
+                amz_date,
+                region,
+                secret_key,
+                prev_signature: seed_signature,
+            };
+
+            loop {
+                let meta = {
+                    match Self::read_meta_bytes(body.as_mut(), prev_bytes, &mut buf).await {
+                        None => break,
+                        Some(Err(e)) => return Err(AwsChunkedStreamError::Io(e)),
+                        Some(Ok(remaining_bytes)) => prev_bytes = remaining_bytes,
+                    };
+                    if let Ok((_, meta)) = parse_chunk_meta(&buf) {
+                        meta
+                    } else {
+                        return Err(AwsChunkedStreamError::FormatError);
+                    }
                 };
 
-                loop {
-                    let meta = {
-                        match Self::read_meta_bytes(body.as_mut(), prev_bytes, &mut buf).await {
-                            None => break,
-                            Some(Err(e)) => {
-                                return Err(ChunkedStreamError::Io(e));
-                            }
-                            Some(Ok(remaining_bytes)) => prev_bytes = remaining_bytes,
-                        };
-                        if let Ok((_, meta)) = parse_chunk_meta(&buf) {
-                            meta
-                        } else {
-                            return Err(ChunkedStreamError::FormatError);
-                        }
-                    };
-
-                    let data: Vec<Bytes> = {
-                        match Self::read_data(body.as_mut(), prev_bytes, meta.size).await {
-                            None => {
-                                return Err(ChunkedStreamError::Incomplete);
-                            }
-                            Some(Err(e)) => {
-                                return Err(e);
-                            }
-                            Some(Ok((data, remaining_bytes))) => {
-                                prev_bytes = remaining_bytes;
-                                data
-                            }
-                        }
-                    };
-
-                    match check_signature(&ctx, meta.signature, &data) {
-                        None => {
-                            return Err(ChunkedStreamError::SignatureMismatch);
-                        }
-                        Some(signature) => {
-                            ctx.prev_signature = signature;
+                let data: Vec<Bytes> = {
+                    match Self::read_data(body.as_mut(), prev_bytes, meta.size).await {
+                        None => return Err(AwsChunkedStreamError::Incomplete),
+                        Some(Err(e)) => return Err(e),
+                        Some(Ok((data, remaining_bytes))) => {
+                            prev_bytes = remaining_bytes;
+                            data
                         }
                     }
-                    y.yield_iter(data.into_iter());
+                };
+
+                match check_signature(&ctx, meta.signature, &data) {
+                    None => return Err(AwsChunkedStreamError::SignatureMismatch),
+                    Some(signature) => ctx.prev_signature = signature,
                 }
 
-                Ok(())
-            })
-        });
-        Self { inner }
+                for bytes in data {
+                    y.yield_ok(bytes).await
+                }
+            }
+
+            Ok(())
+        })
+        .apply(|inner| Self { inner })
     }
 
     /// read meta bytes and return remaining bytes
@@ -230,7 +229,7 @@ impl ChunkedStream {
         mut body: Pin<&mut S>,
         prev_bytes: Bytes,
         mut data_size: usize,
-    ) -> Option<Result<(Vec<Bytes>, Bytes), ChunkedStreamError>>
+    ) -> Option<Result<(Vec<Bytes>, Bytes), AwsChunkedStreamError>>
     where
         S: Stream<Item = io::Result<Bytes>> + Send + 'static,
     {
@@ -258,7 +257,7 @@ impl ChunkedStream {
 
             loop {
                 match body.next().await? {
-                    Err(e) => return Some(Err(ChunkedStreamError::Io(e))),
+                    Err(e) => return Some(Err(AwsChunkedStreamError::Io(e))),
                     Ok(bytes) => {
                         if let Some(remaining_bytes) = push_data_bytes(bytes) {
                             break 'outer remaining_bytes;
@@ -275,7 +274,7 @@ impl ChunkedStream {
                 loop {
                     match remaining_bytes.as_ref() {
                         [] => match body.next().await? {
-                            Err(e) => return Some(Err(ChunkedStreamError::Io(e))),
+                            Err(e) => return Some(Err(AwsChunkedStreamError::Io(e))),
                             Ok(bytes) => remaining_bytes = bytes,
                         },
 
@@ -283,7 +282,7 @@ impl ChunkedStream {
                             remaining_bytes.advance(1);
                             break;
                         }
-                        _ => return Some(Err(ChunkedStreamError::FormatError)),
+                        _ => return Some(Err(AwsChunkedStreamError::FormatError)),
                     }
                 }
             }
@@ -293,8 +292,8 @@ impl ChunkedStream {
     }
 }
 
-impl Stream for ChunkedStream {
-    type Item = Result<Bytes, ChunkedStreamError>;
+impl Stream for AwsChunkedStream {
+    type Item = Result<Bytes, AwsChunkedStreamError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Pin::new(&mut self.inner).poll_next(cx)
@@ -341,7 +340,7 @@ mod tests {
         let date = AmzDate::from_header_str(timestamp).unwrap();
 
         let stream = futures::stream::iter(chunks.into_iter());
-        let mut chunked_stream = ChunkedStream::new(
+        let mut chunked_stream = AwsChunkedStream::new(
             stream,
             seed_signature.into(),
             date,
