@@ -141,6 +141,13 @@ impl S3Service {
 
         check_signature(&mut ctx, self.auth.as_deref()).await?;
 
+        if ctx.req.method() == Method::POST && ctx.path.is_object() && ctx.multipart.is_some() {
+            return Err(code_error!(
+                MethodNotAllowed,
+                "The specified method is not allowed against this resource."
+            ));
+        }
+
         for handler in &self.handlers {
             if handler.is_match(&ctx) {
                 return handler.handle(&mut ctx, &*self.storage).await;
