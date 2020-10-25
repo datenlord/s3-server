@@ -60,9 +60,6 @@ impl Display for S3Error {
         if let Some(ref source) = self.0.source {
             write!(f, "\nsource: {}", source)?;
         }
-        if let Some(ref span_trace) = self.0.span_trace {
-            write!(f, "\nspan trace: {}", span_trace)?;
-        }
         Ok(())
     }
 }
@@ -98,6 +95,20 @@ impl S3Error {
             code: self.0.code,
             message: self.0.message,
         }
+    }
+
+    /// get span trace
+    #[allow(clippy::missing_const_for_fn)] // See <https://github.com/rust-lang/rust-clippy/issues/5995>
+    #[must_use]
+    pub fn span_trace(&self) -> Option<&SpanTrace> {
+        self.0.span_trace.as_ref()
+    }
+
+    /// get backtrace
+    #[allow(clippy::missing_const_for_fn)] // See <https://github.com/rust-lang/rust-clippy/issues/5995>
+    #[must_use]
+    pub fn backtrace(&self) -> Option<&Backtrace> {
+        self.0.backtrace.as_ref()
     }
 }
 

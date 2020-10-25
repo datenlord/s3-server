@@ -2,7 +2,7 @@
 
 use crate::auth::S3Auth;
 use crate::data_structures::{OrderedHeaders, OrderedQs};
-use crate::errors::{S3AuthError, S3Result};
+use crate::errors::{S3AuthError, S3ErrorCode, S3Result};
 use crate::headers::{AmzContentSha256, AmzDate, AuthorizationV4, CredentialV4};
 use crate::headers::{AUTHORIZATION, CONTENT_TYPE, X_AMZ_CONTENT_SHA256, X_AMZ_DATE};
 use crate::ops::{ReqContext, S3Handler};
@@ -25,6 +25,8 @@ use std::task::{Context, Poll};
 use bytes::Bytes;
 use futures::future::BoxFuture;
 use futures::stream::{Stream, StreamExt};
+
+use tracing::{debug, error};
 
 /// S3 service
 pub struct S3Service {
@@ -112,11 +114,28 @@ impl S3Service {
     /// call s3 service with a hyper request
     /// # Errors
     /// Returns an `Err` if any component failed
+    #[tracing::instrument(
+        level = "debug",
+        skip(self, req),
+        fields(
+            method = ?req.method(),
+            uri = ?req.uri(),
+            start_time = ?chrono::Utc::now(),
+        )
+    )]
     pub async fn hyper_call(&self, req: Request) -> Result<Response, BoxStdError> {
-        match self.handle(req).await {
+        debug!("req = \n{:#?}", req);
+        let ret = match self.handle(req).await {
             Ok(resp) => Ok(resp),
-            Err(err) => Ok(err.into_xml_response().try_into_response()?),
-        }
+            Err(err) => err.into_xml_response().try_into_response(),
+        };
+
+        match ret {
+            Ok(ref resp) => debug!("resp = \n{:#?}", resp),
+            Err(ref err) => error!(%err),
+        };
+
+        Ok(ret?)
     }
 
     /// handle a request
@@ -162,16 +181,17 @@ impl S3Service {
 fn extract_s3_path(req: &Request) -> S3Result<S3Path<'_>> {
     let result = S3Path::try_from_path(req.uri().path());
     let err = try_err!(result);
-    match *err.kind() {
+    let (code, msg) = match *err.kind() {
         S3PathErrorKind::InvalidPath => {
-            code_error!(InvalidURI, "Couldn't parse the specified URI.", err)
+            (S3ErrorCode::InvalidURI, "Couldn't parse the specified URI.")
         }
-        S3PathErrorKind::InvalidBucketName => {
-            code_error!(InvalidBucketName, "The specified bucket is not valid.", err)
-        }
-        S3PathErrorKind::KeyTooLong => code_error!(KeyTooLongError, "Your key is too long.", err),
-    }
-    .apply(Err)
+        S3PathErrorKind::InvalidBucketName => (
+            S3ErrorCode::InvalidBucketName,
+            "The specified bucket is not valid.",
+        ),
+        S3PathErrorKind::KeyTooLong => (S3ErrorCode::KeyTooLongError, "Your key is too long."),
+    };
+    Err(code_error!(code = code, msg, err))
 }
 
 /// extrace `OrderedHeaders<'_>` from request

@@ -146,7 +146,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build 
-          args: --example s3
+          args: --example s3 --release
 
       - name: Run mint
         run: |
