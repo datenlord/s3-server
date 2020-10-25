@@ -93,18 +93,45 @@ macro_rules! bool_try_some {
 
 /// Create a `S3Error` with code and message
 macro_rules! code_error {
-    ($code:ident, $msg:expr $(, $source:expr)?) => {{
-        let code = $crate::errors::S3ErrorCode::$code;
+    ($code:ident, $msg:expr $(, $source:expr)?) => {
+        code_error!(code = $crate::errors::S3ErrorCode::$code, $msg $(, $source)?)
+    };
+    (code = $code:expr, $msg:expr $(, $source:expr)?) => {{
+        let code = $code;
         let err = $crate::errors::S3Error::from_code(code).message($msg);
-        $(
-            let err = err.source($source);
-        )?
+
+        $(let err = err.source($source);)?
+
+        #[cfg(debug_assertions)]
+        let err = err.capture_span_trace();
+
+        #[cfg(debug_assertions)]
+        let err = err.capture_backtrace();
+
         let err = err.finish();
 
-        tracing::debug!(
-            location = concat!(file!(), ":", line!()),
+        const LOCATION: &str = concat!(file!(), ":", line!());
+
+        tracing::error!(
+            location = LOCATION,
             "generated s3 error: {}", err
         );
+
+        if let Some(t) = err.span_trace(){
+            if t.status() == tracing_error::SpanTraceStatus::CAPTURED {
+                tracing::error!(
+                    "location: {}, error: {}, span trace:\n{}",
+                    LOCATION, err, t
+                );
+            }
+        }
+
+        if let Some(t) = err.backtrace(){
+            tracing::error!(
+                "location: {}, error: {}, backtrace:\n{:?}",
+                LOCATION, err, t
+            );
+        }
 
         err
     }};
