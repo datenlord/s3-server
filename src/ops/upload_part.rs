@@ -2,7 +2,7 @@
 
 use super::{wrap_internal_error, ReqContext, S3Handler};
 
-use crate::dto::{ByteStream, UploadPartError, UploadPartOutput, UploadPartRequest};
+use crate::dto::{UploadPartError, UploadPartOutput, UploadPartRequest};
 use crate::errors::{S3Error, S3Result};
 use crate::headers::{
     CONTENT_LENGTH, CONTENT_MD5, ETAG, X_AMZ_REQUEST_CHARGED, X_AMZ_SERVER_SIDE_ENCRYPTION,
@@ -11,12 +11,9 @@ use crate::headers::{
 };
 use crate::output::S3Output;
 use crate::storage::S3Storage;
-use crate::utils::{Apply, ResponseExt};
-use crate::{async_trait, Body, Method, Response};
-
-use std::io;
-
-use futures::StreamExt;
+use crate::utils::body::transform_body_stream;
+use crate::utils::ResponseExt;
+use crate::{async_trait, Method, Response};
 
 /// `UploadPart` handler
 pub struct Handler;
@@ -38,19 +35,6 @@ impl S3Handler for Handler {
         let output = storage.upload_part(input).await;
         output.try_into_response()
     }
-}
-
-/// transform stream
-fn transform_body_stream(body: Body) -> ByteStream {
-    body.map(|try_chunk| {
-        try_chunk.map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Error obtaining chunk: {}", e),
-            )
-        })
-    })
-    .apply(ByteStream::new)
 }
 
 /// extract operation request

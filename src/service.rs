@@ -173,7 +173,7 @@ impl S3Service {
             }
         }
 
-        Err(not_supported!())
+        Err(not_supported!("The operation is not supported yet."))
     }
 }
 
@@ -311,7 +311,11 @@ async fn check_post_signature(
 
     let auth_provider = match auth {
         Some(a) => a,
-        None => return Err(not_supported!()),
+        None => {
+            return Err(not_supported!(
+                "The service has no authentication provider."
+            ))
+        }
     };
 
     let mime = ctx.mime.as_ref().unwrap_or_else(|| panic!("missing mime"));
@@ -340,7 +344,9 @@ async fn check_post_signature(
 
     // check x_amz_algorithm
     if x_amz_algorithm != "AWS4-HMAC-SHA256" {
-        return Err(not_supported!());
+        return Err(not_supported!(
+            "x-amz-algorithm other than AWS4-HMAC-SHA256 is not supported."
+        ));
     }
 
     // check x_amz_credential
@@ -393,7 +399,11 @@ async fn check_presigned_url(
 
     let auth_provider = match auth {
         Some(a) => a,
-        None => return Err(not_supported!()),
+        None => {
+            return Err(not_supported!(
+                "The service has no authentication provider."
+            ))
+        }
     };
 
     let secret_key =
@@ -443,7 +453,11 @@ async fn check_header_auth(
 
     let auth_provider = match auth {
         Some(a) => a,
-        None => return Err(not_supported!()),
+        None => {
+            return Err(not_supported!(
+                "The service has no authentication provider."
+            ))
+        }
     };
 
     let auth: AuthorizationV4<'_> = extract_authorization_v4(&ctx.headers)?

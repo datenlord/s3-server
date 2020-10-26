@@ -2,7 +2,7 @@
 
 use super::{wrap_internal_error, ReqContext, S3Handler};
 
-use crate::dto::{ByteStream, PutObjectError, PutObjectOutput, PutObjectRequest};
+use crate::dto::{PutObjectError, PutObjectOutput, PutObjectRequest};
 use crate::errors::{S3Error, S3ErrorCode, S3Result};
 use crate::headers::{
     CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_ENCODING, CONTENT_LANGUAGE, CONTENT_LENGTH,
@@ -18,15 +18,13 @@ use crate::headers::{
 use crate::output::S3Output;
 use crate::path::S3Path;
 use crate::storage::S3Storage;
-use crate::streams::multipart::{FileStream, FileStreamError, Multipart};
+use crate::streams::multipart::Multipart;
+use crate::utils::body::{transform_body_stream, transform_file_stream};
 use crate::utils::{Apply, ResponseExt};
-use crate::{async_trait, Body, Method, Response};
+use crate::{async_trait, Method, Response};
 
 use std::collections::HashMap;
-use std::io;
 use std::mem;
-
-use futures::stream::StreamExt;
 
 /// `PutObject` handler
 pub struct Handler;
@@ -54,34 +52,6 @@ impl S3Handler for Handler {
         let output = storage.put_object(input).await;
         output.try_into_response()
     }
-}
-
-/// transform stream
-fn transform_file_stream(file_stream: FileStream) -> ByteStream {
-    file_stream
-        .map(|try_chunk| {
-            try_chunk.map_err(|e| match e {
-                FileStreamError::Incomplete => io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Error obtaining chunk: {}", e),
-                ),
-                FileStreamError::Io(e) => e,
-            })
-        })
-        .apply(ByteStream::new)
-}
-
-/// transform stream
-fn transform_body_stream(body: Body) -> ByteStream {
-    body.map(|try_chunk| {
-        try_chunk.map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Error obtaining chunk: {}", e),
-            )
-        })
-    })
-    .apply(ByteStream::new)
 }
 
 /// extract from multipart
