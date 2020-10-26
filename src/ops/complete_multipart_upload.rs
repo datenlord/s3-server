@@ -13,7 +13,8 @@ use crate::headers::{
 };
 use crate::output::S3Output;
 use crate::storage::S3Storage;
-use crate::utils::{deserialize_xml_body, ResponseExt, XmlWriterExt};
+use crate::utils::body::deserialize_xml_body;
+use crate::utils::{ResponseExt, XmlWriterExt};
 use crate::{async_trait, Response};
 
 use hyper::Method;

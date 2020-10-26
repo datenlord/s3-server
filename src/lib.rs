@@ -54,6 +54,8 @@
 )]
 
 #[macro_use]
+mod internal_macros;
+
 pub(crate) mod utils;
 
 mod data_structures;

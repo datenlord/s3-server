@@ -140,15 +140,6 @@ impl FileSystem {
     }
 }
 
-macro_rules! trace_try {
-    ($ret:expr) => {
-        match $ret {
-            Ok(r) => r,
-            Err(e) => return Err(internal_error!(e).into()),
-        }
-    };
-}
-
 /// wrap operation error
 const fn operation_error<E>(e: E) -> S3StorageError<E> {
     S3StorageError::Operation(e)
@@ -187,7 +178,9 @@ impl S3Storage for FileSystem {
             .map_err(|err| invalid_request!("Invalid header: x-amz-copy-source", err))?;
 
         let (bucket, key) = match copy_source {
-            AmzCopySource::AccessPoint { .. } => return Err(not_supported!().into()),
+            AmzCopySource::AccessPoint { .. } => {
+                return Err(not_supported!("Access point is not supported yet.").into())
+            }
             AmzCopySource::Bucket { bucket, key } => (bucket, key),
         };
 
@@ -594,7 +587,10 @@ impl S3Storage for FileSystem {
                 let output = PutObjectOutput::default();
                 return Ok(output);
             } else {
-                let err = not_supported!();
+                let err = code_error!(
+                    UnexpectedContent,
+                    "Unexpected request body when creating a directory object."
+                );
                 return Err(err.into());
             }
         }
