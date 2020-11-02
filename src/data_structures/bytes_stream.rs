@@ -25,8 +25,7 @@ impl<R> BytesStream<R> {
     }
 }
 
-#[cfg(feature = "rt-tokio")]
-impl<R: tokio::io::AsyncRead> Stream for BytesStream<R> {
+impl<R: futures::AsyncRead> Stream for BytesStream<R> {
     type Item = io::Result<Bytes>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
