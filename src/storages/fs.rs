@@ -1,4 +1,4 @@
-//! fs implementation based on `tokio`
+//! fs implementation
 
 use crate::async_trait;
 use crate::data_structures::BytesStream;
@@ -29,15 +29,14 @@ use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use futures::TryStreamExt;
+use futures::io::BufWriter;
+use futures::{AsyncReadExt, AsyncWriteExt, StreamExt, TryStreamExt};
 use md5::{Digest, Md5};
 use path_absolutize::Absolutize;
 use tracing::{debug, error};
 use uuid::Uuid;
 
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
-use tokio::stream::StreamExt;
+use async_fs::File;
 
 /// A S3 storage implementation based on file system
 #[derive(Debug)]
@@ -95,7 +94,7 @@ impl FileSystem {
     ) -> io::Result<Option<HashMap<String, String>>> {
         let path = self.get_metadata_path(bucket, key)?;
         if path.exists() {
-            let content = tokio::fs::read(&path).await?;
+            let content = async_fs::read(&path).await?;
             let map = serde_json::from_slice(&content)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             Ok(Some(map))
@@ -114,7 +113,7 @@ impl FileSystem {
         let path = self.get_metadata_path(bucket, key)?;
         let content = serde_json::to_vec(metadata)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        tokio::fs::write(&path, &content).await
+        async_fs::write(&path, &content).await
     }
 
     /// get md5 sum
@@ -163,7 +162,7 @@ impl S3Storage for FileSystem {
             return Err(operation_error(err));
         }
 
-        trace_try!(tokio::fs::create_dir(&path).await);
+        trace_try!(async_fs::create_dir(&path).await);
 
         let output = CreateBucketOutput::default(); // TODO: handle other fields
         Ok(output)
@@ -187,10 +186,10 @@ impl S3Storage for FileSystem {
         let src_path = trace_try!(self.get_object_path(bucket, key));
         let dst_path = trace_try!(self.get_object_path(&input.bucket, &input.key));
 
-        let file_metadata = trace_try!(tokio::fs::metadata(&src_path).await);
+        let file_metadata = trace_try!(async_fs::metadata(&src_path).await);
         let last_modified = time::to_rfc3339(trace_try!(file_metadata.modified()));
 
-        let _ = trace_try!(tokio::fs::copy(&src_path, &dst_path).await);
+        let _ = trace_try!(async_fs::copy(&src_path, &dst_path).await);
 
         debug!(
             from = %src_path.display(),
@@ -201,7 +200,7 @@ impl S3Storage for FileSystem {
         let src_metadata_path = trace_try!(self.get_metadata_path(bucket, key));
         if src_metadata_path.exists() {
             let dst_metadata_path = trace_try!(self.get_metadata_path(&input.bucket, &input.key));
-            let _ = trace_try!(tokio::fs::copy(src_metadata_path, dst_metadata_path).await);
+            let _ = trace_try!(async_fs::copy(src_metadata_path, dst_metadata_path).await);
         }
 
         let md5_sum = trace_try!(self.get_md5_sum(bucket, key).await);
@@ -224,7 +223,7 @@ impl S3Storage for FileSystem {
         input: DeleteBucketRequest,
     ) -> S3StorageResult<DeleteBucketOutput, DeleteBucketError> {
         let path = trace_try!(self.get_bucket_path(&input.bucket));
-        trace_try!(tokio::fs::remove_dir_all(path).await);
+        trace_try!(async_fs::remove_dir_all(path).await);
         Ok(DeleteBucketOutput)
     }
 
@@ -235,13 +234,13 @@ impl S3Storage for FileSystem {
     ) -> S3StorageResult<DeleteObjectOutput, DeleteObjectError> {
         let path = trace_try!(self.get_object_path(&input.bucket, &input.key));
         if input.key.ends_with('/') {
-            let mut dir = trace_try!(tokio::fs::read_dir(&path).await);
+            let mut dir = trace_try!(async_fs::read_dir(&path).await);
             let is_empty = dir.next().await.is_none();
             if is_empty {
-                trace_try!(tokio::fs::remove_dir(&path).await);
+                trace_try!(async_fs::remove_dir(&path).await);
             }
         } else {
-            trace_try!(tokio::fs::remove_file(path).await);
+            trace_try!(async_fs::remove_file(path).await);
         }
         let output = DeleteObjectOutput::default(); // TODO: handle other fields
         Ok(output)
@@ -262,7 +261,7 @@ impl S3Storage for FileSystem {
 
         let mut deleted: Vec<DeletedObject> = Vec::new();
         for (path, key) in objects {
-            trace_try!(tokio::fs::remove_file(path).await);
+            trace_try!(async_fs::remove_file(path).await);
             deleted.push(DeletedObject {
                 key: Some(key),
                 ..DeletedObject::default()
@@ -371,7 +370,7 @@ impl S3Storage for FileSystem {
             return Err(err.into());
         }
 
-        let file_metadata = trace_try!(tokio::fs::metadata(path).await);
+        let file_metadata = trace_try!(async_fs::metadata(path).await);
         let last_modified = time::to_rfc3339(trace_try!(file_metadata.modified()));
         let size = file_metadata.len();
 
@@ -394,7 +393,7 @@ impl S3Storage for FileSystem {
     ) -> S3StorageResult<ListBucketsOutput, ListBucketsError> {
         let mut buckets = Vec::new();
 
-        let mut iter = trace_try!(tokio::fs::read_dir(&self.root).await);
+        let mut iter = trace_try!(async_fs::read_dir(&self.root).await);
         while let Some(entry) = iter.next().await {
             let entry = trace_try!(entry);
             let file_type = trace_try!(entry.file_type().await);
@@ -429,7 +428,7 @@ impl S3Storage for FileSystem {
         dir_queue.push_back(path.clone());
 
         while let Some(dir) = dir_queue.pop_front() {
-            let mut entries = trace_try!(tokio::fs::read_dir(dir).await);
+            let mut entries = trace_try!(async_fs::read_dir(dir).await);
             while let Some(entry) = entries.next().await {
                 let entry = trace_try!(entry);
                 let file_type = trace_try!(entry.file_type().await);
@@ -495,7 +494,7 @@ impl S3Storage for FileSystem {
         dir_queue.push_back(path.clone());
 
         while let Some(dir) = dir_queue.pop_front() {
-            let mut entries = trace_try!(tokio::fs::read_dir(dir).await);
+            let mut entries = trace_try!(async_fs::read_dir(dir).await);
             while let Some(entry) = entries.next().await {
                 let entry = trace_try!(entry);
                 let file_type = trace_try!(entry.file_type().await);
@@ -583,7 +582,7 @@ impl S3Storage for FileSystem {
         if key.ends_with('/') {
             if content_length == Some(0) {
                 let object_path = trace_try!(self.get_object_path(&bucket, &key));
-                trace_try!(tokio::fs::create_dir_all(&object_path).await);
+                trace_try!(async_fs::create_dir_all(&object_path).await);
                 let output = PutObjectOutput::default();
                 return Ok(output);
             } else {
@@ -598,17 +597,29 @@ impl S3Storage for FileSystem {
         let object_path = trace_try!(self.get_object_path(&bucket, &key));
 
         let mut md5_hash = Md5::new();
-        let body = body.map_ok(|bytes| {
+        let mut reader = body.map_ok(|bytes| {
             md5_hash.update(&bytes);
             bytes
         });
 
         let file = trace_try!(File::create(&object_path).await);
-        let mut reader = tokio::io::stream_reader(body);
-        let mut writer = tokio::io::BufWriter::new(file);
+        let mut writer = BufWriter::new(file);
 
-        let (ret, duration) = time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
+        let (ret, duration) = time::count_duration(async {
+            let mut size: usize = 0;
+            while let Some(bytes) = reader.next().await {
+                let nwrite = writer.write(bytes?.as_ref()).await?;
+                size = size.checked_add(nwrite).unwrap_or_else(|| {
+                    panic!("size overflow: size = {}, nwrite = {}", size, nwrite)
+                });
+            }
+            writer.flush().await?;
+            <io::Result<usize>>::Ok(size)
+        })
+        .await;
+
         let size = trace_try!(ret);
+
         debug!(
             path = %object_path.display(),
             ?size,
@@ -664,16 +675,27 @@ impl S3Storage for FileSystem {
         let file_path = trace_try!(Path::new(&file_path_str).absolutize_virtually(&self.root));
 
         let mut md5_hash = Md5::new();
-        let body = body.map_ok(|bytes| {
+        let mut reader = body.map_ok(|bytes| {
             md5_hash.update(&bytes);
             bytes
         });
 
         let file = trace_try!(File::create(&file_path).await);
-        let mut reader = tokio::io::stream_reader(body);
-        let mut writer = tokio::io::BufWriter::new(file);
+        let mut writer = BufWriter::new(file);
 
-        let (ret, duration) = time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
+        let (ret, duration) = time::count_duration(async {
+            let mut size: usize = 0;
+            while let Some(bytes) = reader.next().await {
+                let nwrite = writer.write(bytes?.as_ref()).await?;
+                size = size.checked_add(nwrite).unwrap_or_else(|| {
+                    panic!("size overflow: size = {}, nwrite = {}", size, nwrite)
+                });
+            }
+            writer.flush().await?;
+            <io::Result<usize>>::Ok(size)
+        })
+        .await;
+
         let size = trace_try!(ret);
         debug!(
             path = %file_path.display(),
@@ -713,7 +735,7 @@ impl S3Storage for FileSystem {
 
         let object_path = trace_try!(self.get_object_path(&bucket, &key));
         let file = trace_try!(File::create(&object_path).await);
-        let mut writer = tokio::io::BufWriter::new(file);
+        let mut writer = BufWriter::new(file);
 
         let mut cnt: i64 = 0;
         for part in multipart_upload.parts.into_iter().flatten() {
@@ -729,10 +751,12 @@ impl S3Storage for FileSystem {
             }
             let part_path_str = format!(".upload_id-{}.part-{}", upload_id, part_number);
             let part_path = trace_try!(Path::new(&part_path_str).absolutize_virtually(&self.root));
-            let mut reader = tokio::io::BufReader::new(trace_try!(File::open(&part_path).await));
+
+            let mut reader = trace_try!(File::open(&part_path).await);
             let (ret, duration) =
-                time::count_duration(tokio::io::copy(&mut reader, &mut writer)).await;
+                time::count_duration(futures::io::copy(&mut reader, &mut writer)).await;
             let size = trace_try!(ret);
+
             debug!(
                 from = %part_path.display(),
                 to = %object_path.display(),
@@ -740,11 +764,11 @@ impl S3Storage for FileSystem {
                 ?duration,
                 "CompleteMultipartUpload: write file",
             );
-            trace_try!(tokio::fs::remove_file(&part_path).await);
+            trace_try!(async_fs::remove_file(&part_path).await);
         }
         drop(writer);
 
-        let file_size = trace_try!(tokio::fs::metadata(&object_path).await).len();
+        let file_size = trace_try!(async_fs::metadata(&object_path).await).len();
 
         let (md5_sum, duration) = {
             let (ret, duration) = time::count_duration(self.get_md5_sum(&bucket, &key)).await;
