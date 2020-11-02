@@ -12,21 +12,30 @@ use s3_server::S3Service;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, StatusCode};
+use tracing::debug_span;
 
 use tokio::fs;
 
 fn setup_service() -> Result<(PathBuf, S3Service)> {
+    common::setup_tracing();
+
     let root = common::setup_fs_root(true).unwrap();
-    let fs = FileSystem::new(&root)
-        .with_context(|| format!("Failed to create filesystem: root = {:?}", root))
-        .unwrap();
+
+    enter!(debug_span!("setup service", root = %root.display()));
+
+    let fs = trace_ctx!(FileSystem::new(&root), "failed to create filesystem: {err}")?;
     let service = S3Service::new(fs);
+
     Ok((root, service))
 }
 
+#[tracing::instrument(
+    skip(root),
+    fields(root = %root.as_ref().display()),
+)]
 pub async fn helper_write_object(
     root: impl AsRef<Path>,
     bucket: &str,
