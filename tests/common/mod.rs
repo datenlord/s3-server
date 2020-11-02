@@ -5,34 +5,78 @@ use std::fs;
 use std::mem;
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use hyper::{header, Body};
 use mime::Mime;
+use tracing::debug_span;
+use tracing_subscriber::EnvFilter;
+
+#[macro_export]
+macro_rules! enter {
+    ($span:expr) => {
+        let __span = $span;
+        let __enter = __span.enter();
+    };
+}
+
+#[macro_export]
+macro_rules! trace_ctx{
+    ($result:expr, $fmt:literal $($args:tt)*) => {
+        match $result {
+            Ok(r) => Ok(r),
+            Err(e) => Err({
+                tracing::error!($fmt, err = e $($args)*);
+                let ctx = format!($fmt, err = e $($args)*);
+                anyhow::Error::new(e).context(ctx)
+            }),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! trace_anyhow{
+    ($fmt:literal $($args:tt)*) => {{
+        tracing::error!($fmt $($args)*);
+        anyhow::anyhow!($fmt $($args)*)
+    }}
+}
 
 pub type Request = hyper::Request<Body>;
 pub type Response = hyper::Response<Body>;
+
+pub fn setup_tracing() {
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::try_new("s3_server=debug").unwrap())
+        .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc3339())
+        .with_test_writer()
+        .try_init();
+}
 
 pub fn setup_fs_root(clear: bool) -> Result<PathBuf> {
     let root: PathBuf = env::var("S3_TEST_FS_ROOT")
         .unwrap_or_else(|_| "target/s3-test".into())
         .into();
 
+    enter!(debug_span!("setup fs root", ?clear, root = %root.display()));
+
     let exists = root.exists();
     if exists && clear {
-        fs::remove_dir_all(&root)
-            .with_context(|| format!("Failed to remove directory: {}", root.display()))?;
+        trace_ctx!(
+            fs::remove_dir_all(&root),
+            "failed to remove root directory: {err}",
+        )?;
     }
 
     if !exists || clear {
-        fs::create_dir_all(&root)
-            .with_context(|| format!("Failed to create directory: {}", root.display()))?;
+        trace_ctx!(
+            fs::create_dir_all(&root),
+            "failed to create directory: {err}",
+        )?;
     }
 
-    assert!(
-        root.exists(),
-        "root does not exist. root = {}",
-        root.display()
-    );
+    if !root.exists() {
+        return Err(trace_anyhow!("root does not exist"));
+    }
 
     Ok(root)
 }
