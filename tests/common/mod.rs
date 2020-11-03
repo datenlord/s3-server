@@ -34,14 +34,18 @@ pub type Request = hyper::Request<Body>;
 pub type Response = hyper::Response<Body>;
 
 pub fn setup_tracing() {
+    use tracing_error::ErrorSubscriber;
+    use tracing_subscriber::subscribe::CollectorExt;
+    use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{fmt, EnvFilter};
 
-    let _ = fmt()
+    let _ = tracing_subscriber::fmt()
+        .event_format(fmt::format::Format::default().pretty())
         .with_env_filter(EnvFilter::try_new("s3_server=debug").unwrap())
         .with_timer(fmt::time::ChronoLocal::rfc3339())
         .with_test_writer()
-        .with_file(true)
-        .with_line(true)
+        .finish()
+        .with(ErrorSubscriber::default())
         .try_init();
 }
 
