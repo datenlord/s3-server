@@ -29,9 +29,9 @@ use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use bytes::Bytes;
 use futures::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt, BufWriter};
 use futures::stream::{Stream, StreamExt, TryStreamExt};
+use hyper::body::Bytes;
 use md5::{Digest, Md5};
 use path_absolutize::Absolutize;
 use tracing::{debug, error};

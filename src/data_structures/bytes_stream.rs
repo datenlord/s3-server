@@ -6,8 +6,8 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use bytes::Bytes;
 use futures::stream::Stream;
+use hyper::body::Bytes;
 use pin_project_lite::pin_project;
 
 pin_project! {

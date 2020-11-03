@@ -10,9 +10,9 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-use bytes::{Buf, Bytes};
 use futures::pin_mut;
 use futures::stream::{Stream, StreamExt};
+use hyper::body::{Buf, Bytes};
 use memchr::memchr;
 use transform_stream::AsyncTryStream;
 
@@ -78,7 +78,7 @@ fn parse_chunk_meta(mut input: &[u8]) -> nom::IResult<&[u8], ChunkMeta<'_>> {
         sequence::tuple,
     };
 
-    let parser = all_consuming(tuple((
+    let mut parser = all_consuming(tuple((
         take_till1(|c| c == b';'),
         tag(b";chunk-signature="),
         take(64_usize),
@@ -305,8 +305,6 @@ mod tests {
     use super::*;
     use crate::utils::Also;
 
-    use bytes::BytesMut;
-
     #[tokio::test]
     async fn example_put_object_chunked_stream() {
         let chunk1_meta = b"10000;chunk-signature=ad80c730a21e5b8d04586a2213dd63b9a0e99e0e2307b0ade35a65485a288648\r\n";
@@ -316,19 +314,19 @@ mod tests {
         let chunk1_data = vec![b'a'; 0x10000]; // 65536
         let chunk2_data = vec![b'a'; 1024];
 
-        let chunk1 = BytesMut::from(chunk1_meta.as_ref())
+        let chunk1 = Vec::from(chunk1_meta.as_ref())
             .also(|b| b.extend_from_slice(&chunk1_data))
             .also(|b| b.extend_from_slice(b"\r\n"))
-            .freeze();
+            .into();
 
-        let chunk2 = BytesMut::from(chunk2_meta.as_ref())
+        let chunk2 = Vec::from(chunk2_meta.as_ref())
             .also(|b| b.extend_from_slice(&chunk2_data))
             .also(|b| b.extend_from_slice(b"\r\n"))
-            .freeze();
+            .into();
 
-        let chunk3 = BytesMut::from(chunk3_meta.as_ref())
+        let chunk3 = Vec::from(chunk3_meta.as_ref())
             .also(|b| b.extend_from_slice(b"\r\n"))
-            .freeze();
+            .into();
 
         let chunks = vec![Ok(chunk1), Ok(chunk2), Ok(chunk3)];
 

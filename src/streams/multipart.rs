@@ -12,8 +12,8 @@ use std::mem;
 use std::pin::Pin;
 use std::str::FromStr;
 
-use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
+use hyper::body::Bytes;
 use memchr::memchr_iter;
 use transform_stream::{AsyncTryStream, Yielder};
 
@@ -448,7 +448,7 @@ fn parse_content_disposition(input: &[u8]) -> nom::IResult<&[u8], ContentDisposi
         take(1_usize),
     );
 
-    let parser = all_consuming(tuple((
+    let mut parser = all_consuming(tuple((
         preceded(tag(b"form-data; "), name_parser),
         opt(preceded(tag(b"; "), filename_parser)),
     )));
@@ -466,16 +466,14 @@ mod tests {
 
     use std::slice;
 
-    use bytes::BytesMut;
-
     async fn aggregate_file_stream(mut file_stream: FileStream) -> Result<Bytes, FileStreamError> {
-        let mut buf = BytesMut::new();
+        let mut buf = Vec::new();
 
         while let Some(bytes) = file_stream.next().await {
             buf.extend(bytes?)
         }
 
-        Ok(buf.freeze())
+        Ok(buf.into())
     }
 
     #[test]
