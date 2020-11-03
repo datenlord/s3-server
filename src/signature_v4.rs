@@ -11,7 +11,7 @@ use crate::data_structures::{OrderedHeaders, OrderedQs};
 use crate::headers::{AmzDate, CredentialV4};
 use crate::utils::{crypto, Also, Apply};
 
-use bytes::Bytes;
+use hyper::body::Bytes;
 use hyper::Method;
 use smallvec::SmallVec;
 

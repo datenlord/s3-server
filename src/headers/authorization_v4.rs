@@ -62,8 +62,8 @@ impl<'a> CredentialV4<'a> {
             sequence::terminated,
         };
 
-        let slash_tail1 = terminated(take_till1(|c| c == '/'), take(1_usize));
-        let slash_tail0 = terminated(take_till(|c| c == '/'), take(1_usize));
+        let mut slash_tail1 = terminated(take_till1(|c| c == '/'), take(1_usize));
+        let mut slash_tail0 = terminated(take_till(|c| c == '/'), take(1_usize));
 
         parse_and_bind!(mut input => slash_tail1 => access_key_id);
         parse_and_bind!(mut input => slash_tail1 => date);
@@ -146,7 +146,8 @@ impl<'a> AuthorizationV4<'a> {
 
             let mut headers: SmallVec<[&str; 16]> = SmallVec::new();
             loop {
-                let expect_header = tuple((take_till1(|c| c == ';' || c == ','), take(1_usize)));
+                let mut expect_header =
+                    tuple((take_till1(|c| c == ';' || c == ','), take(1_usize)));
                 parse_and_bind!(mut input => expect_header => (header, sep));
                 headers.push(header);
                 if sep == "," {

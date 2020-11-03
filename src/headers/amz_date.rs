@@ -39,7 +39,7 @@ impl AmzDate {
                 sequence::tuple,
             };
 
-            let parser = verify(
+            let mut parser = verify(
                 all_consuming(tuple((
                     take(4_usize),
                     take(2_usize),

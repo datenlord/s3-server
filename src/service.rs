@@ -22,9 +22,9 @@ use std::ops::Deref;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use bytes::Bytes;
 use futures::future::BoxFuture;
 use futures::stream::{Stream, StreamExt};
+use hyper::body::Bytes;
 
 use tracing::{debug, error};
 

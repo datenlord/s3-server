@@ -2,8 +2,8 @@
 
 use crate::utils::Also;
 
-use bytes::Bytes;
 use hmac::{Hmac, Mac, NewMac};
+use hyper::body::Bytes;
 use sha2::{Digest, Sha256};
 
 /// convert bytes to hex string
