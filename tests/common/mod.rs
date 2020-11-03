@@ -5,50 +5,43 @@ use std::fs;
 use std::mem;
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use hyper::{header, Body};
 use mime::Mime;
-use tracing::debug_span;
-use tracing_subscriber::EnvFilter;
+use tracing::{debug_span, error};
 
-#[macro_export]
-macro_rules! enter {
+pub trait ResultExt<T, E> {
+    fn inspect_err(self, f: impl FnOnce(&mut E)) -> Self;
+}
+
+impl<T, E> ResultExt<T, E> for Result<T, E> {
+    fn inspect_err(mut self, f: impl FnOnce(&mut E)) -> Self {
+        if let Err(ref mut e) = self {
+            f(e)
+        }
+        self
+    }
+}
+
+macro_rules! enter_sync {
     ($span:expr) => {
         let __span = $span;
         let __enter = __span.enter();
     };
 }
 
-#[macro_export]
-macro_rules! trace_ctx{
-    ($result:expr, $fmt:literal $($args:tt)*) => {
-        match $result {
-            Ok(r) => Ok(r),
-            Err(e) => Err({
-                tracing::error!($fmt, err = e $($args)*);
-                let ctx = format!($fmt, err = e $($args)*);
-                anyhow::Error::new(e).context(ctx)
-            }),
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! trace_anyhow{
-    ($fmt:literal $($args:tt)*) => {{
-        tracing::error!($fmt $($args)*);
-        anyhow::anyhow!($fmt $($args)*)
-    }}
-}
-
 pub type Request = hyper::Request<Body>;
 pub type Response = hyper::Response<Body>;
 
 pub fn setup_tracing() {
-    let _ = tracing_subscriber::fmt()
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    let _ = fmt()
         .with_env_filter(EnvFilter::try_new("s3_server=debug").unwrap())
-        .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc3339())
+        .with_timer(fmt::time::ChronoLocal::rfc3339())
         .with_test_writer()
+        .with_file(true)
+        .with_line(true)
         .try_init();
 }
 
@@ -57,25 +50,22 @@ pub fn setup_fs_root(clear: bool) -> Result<PathBuf> {
         .unwrap_or_else(|_| "target/s3-test".into())
         .into();
 
-    enter!(debug_span!("setup fs root", ?clear, root = %root.display()));
+    enter_sync!(debug_span!("setup fs root", ?clear, root = %root.display()));
 
     let exists = root.exists();
     if exists && clear {
-        trace_ctx!(
-            fs::remove_dir_all(&root),
-            "failed to remove root directory: {err}",
-        )?;
+        fs::remove_dir_all(&root)
+            .inspect_err(|err| error!(%err,"failed to remove root directory"))?;
     }
 
     if !exists || clear {
-        trace_ctx!(
-            fs::create_dir_all(&root),
-            "failed to create directory: {err}",
-        )?;
+        fs::create_dir_all(&root).inspect_err(|err| error!(%err, "failed to create directory"))?;
     }
 
     if !root.exists() {
-        return Err(trace_anyhow!("root does not exist"));
+        let err = anyhow!("root does not exist");
+        error!(%err);
+        return Err(err);
     }
 
     Ok(root)

@@ -1,8 +1,9 @@
 //! cargo test --test basic -- --test-threads=1
 
+#[macro_use]
 mod common;
 
-use common::Request;
+use common::{Request, ResultExt};
 
 use s3_server::headers::X_AMZ_CONTENT_SHA256;
 use s3_server::path::S3Path;
@@ -15,7 +16,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, StatusCode};
-use tracing::debug_span;
+use tracing::{debug_span, error};
 
 use tokio::fs;
 
@@ -24,9 +25,11 @@ fn setup_service() -> Result<(PathBuf, S3Service)> {
 
     let root = common::setup_fs_root(true).unwrap();
 
-    enter!(debug_span!("setup service", root = %root.display()));
+    enter_sync!(debug_span!("setup service", root = %root.display()));
 
-    let fs = trace_ctx!(FileSystem::new(&root), "failed to create filesystem: {err}")?;
+    let fs =
+        FileSystem::new(&root).inspect_err(|err| error!(%err, "failed to create filesystem"))?;
+
     let service = S3Service::new(fs);
 
     Ok((root, service))

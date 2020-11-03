@@ -29,7 +29,6 @@ use hyper::server::Server;
 use hyper::service::make_service_fn;
 use structopt::StructOpt;
 use tracing::{debug, info};
-use tracing_subscriber::EnvFilter;
 
 #[derive(StructOpt)]
 struct Args {
@@ -47,12 +46,20 @@ struct Args {
     secret_key: Option<String>,
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn setup_tracing() {
+    use tracing_subscriber::{fmt, EnvFilter};
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
-        .with_timer(tracing_subscriber::fmt::time::ChronoLocal::rfc3339())
+        .with_timer(fmt::time::ChronoLocal::rfc3339())
+        .with_file(true)
+        .with_line(true)
         .init();
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    setup_tracing();
 
     let args: Args = Args::from_args();
 
