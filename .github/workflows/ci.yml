@@ -151,5 +151,5 @@ jobs:
       - name: Run mint
         run: |
           mkdir data
-          RUST_LOG=info ./scripts/s3-auth.sh data &
+          RUST_LOG=info ./scripts/s3-auth.sh data 1>/dev/null &
           ./scripts/mint.sh

@@ -99,26 +99,23 @@ macro_rules! code_error {
 
         let err = err.finish();
 
-        const LOCATION: &str = concat!(file!(), ":", line!());
-
         tracing::error!(
-            location = LOCATION,
             "generated s3 error: {}", err
         );
 
         if let Some(t) = err.span_trace(){
             if t.status() == tracing_error::SpanTraceStatus::CAPTURED {
                 tracing::error!(
-                    "location: {}, error: {}, span trace:\n{}",
-                    LOCATION, err, t
+                    "error: {}, span trace:\n{}",
+                    err, t
                 );
             }
         }
 
         if let Some(t) = err.backtrace(){
             tracing::error!(
-                "location: {}, error: {}, backtrace:\n{:?}",
-                LOCATION, err, t
+                "error: {}, backtrace:\n{:?}",
+                err, t
             );
         }
 
@@ -159,11 +156,7 @@ macro_rules! internal_error {
             .capture_span_trace()
             .finish();
 
-        tracing::debug!(
-            location = concat!(file!(), ":", line!()),
-            "generated internal error: {}",
-            err
-        );
+        tracing::debug!("generated internal error: {}", err);
 
         err
     }};
