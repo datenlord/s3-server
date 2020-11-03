@@ -29,8 +29,9 @@ use std::env;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use futures::io::BufWriter;
-use futures::{AsyncReadExt, AsyncWriteExt, StreamExt, TryStreamExt};
+use bytes::Bytes;
+use futures::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt, BufWriter};
+use futures::stream::{Stream, StreamExt, TryStreamExt};
 use md5::{Digest, Md5};
 use path_absolutize::Absolutize;
 use tracing::{debug, error};
@@ -137,6 +138,41 @@ impl FileSystem {
         }
         md5_hash.finalize().apply(crypto::to_hex_string).apply(Ok)
     }
+}
+
+/// copy bytes from a stream to a writer
+async fn copy_bytes<S, W>(mut stream: S, writer: &mut W) -> io::Result<usize>
+where
+    S: Stream<Item = io::Result<Bytes>> + Send + Unpin,
+    W: AsyncWrite + Send + Unpin,
+{
+    let mut nwrite: usize = 0;
+    while let Some(bytes) = stream.next().await {
+        let bytes = bytes?;
+
+        let amt_u64 = futures::io::copy_buf(bytes.as_ref(), writer).await?;
+        let amt: usize = amt_u64.try_into().unwrap_or_else(|err| {
+            panic!(
+                "number overflow: u64 to usize, n = {}, err = {}",
+                amt_u64, err
+            )
+        });
+
+        assert_eq!(
+            bytes.len(),
+            amt,
+            "amt mismatch: bytes.len() = {}, amt = {}, nwrite = {}",
+            bytes.len(),
+            amt,
+            nwrite
+        );
+
+        nwrite = nwrite
+            .checked_add(amt)
+            .unwrap_or_else(|| panic!("nwrite overflow: amt = {}, nwrite = {}", amt, nwrite));
+    }
+    writer.flush().await?;
+    Ok(nwrite)
 }
 
 /// wrap operation error
@@ -597,40 +633,26 @@ impl S3Storage for FileSystem {
         let object_path = trace_try!(self.get_object_path(&bucket, &key));
 
         let mut md5_hash = Md5::new();
-        let mut reader = body.map_ok(|bytes| {
-            md5_hash.update(&bytes);
-            bytes
-        });
+        let stream = body.inspect_ok(|bytes| md5_hash.update(bytes.as_ref()));
 
         let file = trace_try!(File::create(&object_path).await);
         let mut writer = BufWriter::new(file);
 
-        let (ret, duration) = time::count_duration(async {
-            let mut size: usize = 0;
-            while let Some(bytes) = reader.next().await {
-                let nwrite = writer.write(bytes?.as_ref()).await?;
-                size = size.checked_add(nwrite).unwrap_or_else(|| {
-                    panic!("size overflow: size = {}, nwrite = {}", size, nwrite)
-                });
-            }
-            writer.flush().await?;
-            <io::Result<usize>>::Ok(size)
-        })
-        .await;
-
+        let (ret, duration) = time::count_duration(copy_bytes(stream, &mut writer)).await;
         let size = trace_try!(ret);
+        let md5_sum = md5_hash.finalize().apply(crypto::to_hex_string);
 
         debug!(
             path = %object_path.display(),
             ?size,
             ?duration,
+            %md5_sum,
             "PutObject: write file",
         );
+
         if let Some(ref metadata) = metadata {
             trace_try!(self.save_metadata(&bucket, &key, metadata).await);
         }
-
-        let md5_sum = md5_hash.finalize().apply(crypto::to_hex_string);
 
         let mut output = PutObjectOutput::default(); // TODO: handle other fields
         output.e_tag = Some(format!("\"{}\"", md5_sum));
@@ -675,36 +697,23 @@ impl S3Storage for FileSystem {
         let file_path = trace_try!(Path::new(&file_path_str).absolutize_virtually(&self.root));
 
         let mut md5_hash = Md5::new();
-        let mut reader = body.map_ok(|bytes| {
-            md5_hash.update(&bytes);
-            bytes
-        });
+        let stream = body.inspect_ok(|bytes| md5_hash.update(bytes.as_ref()));
 
         let file = trace_try!(File::create(&file_path).await);
         let mut writer = BufWriter::new(file);
 
-        let (ret, duration) = time::count_duration(async {
-            let mut size: usize = 0;
-            while let Some(bytes) = reader.next().await {
-                let nwrite = writer.write(bytes?.as_ref()).await?;
-                size = size.checked_add(nwrite).unwrap_or_else(|| {
-                    panic!("size overflow: size = {}, nwrite = {}", size, nwrite)
-                });
-            }
-            writer.flush().await?;
-            <io::Result<usize>>::Ok(size)
-        })
-        .await;
-
+        let (ret, duration) = time::count_duration(copy_bytes(stream, &mut writer)).await;
         let size = trace_try!(ret);
+        let md5_sum = md5_hash.finalize().apply(crypto::to_hex_string);
+
         debug!(
             path = %file_path.display(),
             ?size,
             ?duration,
+            %md5_sum,
             "UploadPart: write file",
         );
 
-        let md5_sum = md5_hash.finalize().apply(crypto::to_hex_string);
         let e_tag = format!("\"{}\"", md5_sum);
 
         let mut output = UploadPartOutput::default();
