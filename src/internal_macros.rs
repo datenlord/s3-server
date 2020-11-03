@@ -91,33 +91,11 @@ macro_rules! code_error {
 
         $(let err = err.source($source);)?
 
-        #[cfg(debug_assertions)]
-        let err = err.capture_span_trace();
-
-        #[cfg(debug_assertions)]
-        let err = err.capture_backtrace();
-
         let err = err.finish();
 
-        tracing::error!(
+        tracing::debug!(
             "generated s3 error: {}", err
         );
-
-        if let Some(t) = err.span_trace(){
-            if t.status() == tracing_error::SpanTraceStatus::CAPTURED {
-                tracing::error!(
-                    "error: {}, span trace:\n{}",
-                    err, t
-                );
-            }
-        }
-
-        if let Some(t) = err.backtrace(){
-            tracing::error!(
-                "error: {}, backtrace:\n{:?}",
-                err, t
-            );
-        }
 
         err
     }};
@@ -156,7 +134,7 @@ macro_rules! internal_error {
             .capture_span_trace()
             .finish();
 
-        tracing::debug!("generated internal error: {}", err);
+        tracing::error!("generated internal error: {}", err);
 
         err
     }};

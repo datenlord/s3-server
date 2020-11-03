@@ -39,12 +39,27 @@ serde_urlencoded = "0.7.0"
 sha2 = "0.9.1"
 smallvec = "1.4.2"
 thiserror = "1.0.20"
-tracing = "0.1.21"
-tracing-error = "0.1.2"
-tracing-futures = "0.2.4"
 transform-stream = "0.1.2"
 uuid = { version = "0.8.1", features = ["v4"] }
 xml-rs = "0.8.3"
+
+[dependencies.tracing]
+git = "https://github.com/tokio-rs/tracing"
+rev = "8070a85"
+version = "0.2.0"
+## FIXME: unpublished version
+
+[dependencies.tracing-error]
+git = "https://github.com/tokio-rs/tracing"
+rev = "8070a85"
+version = "0.2.0"
+## FIXME: unpublished version
+
+[dependencies.tracing-futures]
+git = "https://github.com/tokio-rs/tracing"
+rev = "8070a85"
+version = "0.3.0"
+## FIXME: unpublished version
 
 [dev-dependencies]
 anyhow = "1.0.32"
@@ -58,8 +73,7 @@ version = "0.2.22"
 ## See <https://github.com/hyperium/hyper/issues/2302> 
 
 [dev-dependencies.tracing-subscriber]
-git = "https://github.com/Nugine/tracing"
-rev = "ea78162c"
-# version = "0.2.12"
-## FIXME: currently tracing-subscriber does not display the callsite of an `event!`
-## See <https://github.com/tokio-rs/tracing/issues/1085>
+git = "https://github.com/tokio-rs/tracing"
+rev = "8070a85"
+version = "0.3.0"
+## FIXME: unpublished version

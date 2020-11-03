@@ -47,13 +47,17 @@ struct Args {
 }
 
 fn setup_tracing() {
+    use tracing_error::ErrorSubscriber;
+    use tracing_subscriber::subscribe::CollectorExt;
+    use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{fmt, EnvFilter};
 
     tracing_subscriber::fmt()
+        .event_format(fmt::format::Format::default().pretty())
         .with_env_filter(EnvFilter::from_default_env())
         .with_timer(fmt::time::ChronoLocal::rfc3339())
-        .with_file(true)
-        .with_line(true)
+        .finish()
+        .with(ErrorSubscriber::default())
         .init();
 }
 
