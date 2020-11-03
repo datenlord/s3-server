@@ -22,7 +22,8 @@ jobs:
     - rust: nightly
   fast_finish: true
 
-cache: cargo
+# cache: cargo
+## FIXME: It seems that travis hangs on this step. Why?
 
 script:
   - cargo build --verbose

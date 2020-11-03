@@ -73,29 +73,6 @@ jobs:
           command: clippy
           args: --all-targets --all-features -- -D warnings
 
-  outdated:
-    name: Outdated
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-outdated
-          version: latest
-      - run: cargo outdated
-
-  audit:
-    name: Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/install@v0.1
-        with:
-          crate: cargo-audit
-          version: latest
-      - run: cargo generate-lockfile
-      - run: cargo audit
-
   e2e-test:
     name: E2E Test
     runs-on: ubuntu-latest
