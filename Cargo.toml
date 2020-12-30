@@ -18,7 +18,7 @@ rt-tokio = []
 [dependencies]
 async-std = { version = "1.6.3", optional = true }
 tokio = { version = "0.2.22", default-features = false }
-hyper = "0.13.7"
+hyper = "0.14.2"
 futures = "0.3.5"
 thiserror = "1.0.20"
 rusoto_core = "0.45.0"
