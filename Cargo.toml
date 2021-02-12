@@ -56,5 +56,5 @@ tokio = { version = "0.2.22", features = ["full"] }
 async-std = { version = "1.6.3", features = ["tokio02", "attributes"] }
 futures-timer = "3.0.2"
 anyhow = "1.0.32"
-env_logger = "0.7.1"
+env_logger = "0.8.3"
 structopt = "0.3.17"
