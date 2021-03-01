@@ -4,6 +4,7 @@ use super::{ReqContext, S3Handler};
 
 use crate::dto::{HeadBucketError, HeadBucketOutput, HeadBucketRequest};
 use crate::errors::{S3Error, S3ErrorCode, S3Result};
+use crate::headers::X_AMZ_EXPECTED_BUCKET_OWNER;
 use crate::output::S3Output;
 use crate::storage::S3Storage;
 use crate::utils::Apply;
@@ -34,10 +35,18 @@ impl S3Handler for Handler {
 fn extract(ctx: &mut ReqContext<'_>) -> S3Result<HeadBucketRequest> {
     let bucket = ctx.unwrap_bucket_path();
 
-    HeadBucketRequest {
+    let mut input = HeadBucketRequest {
         bucket: bucket.into(),
-    }
-    .apply(Ok)
+        expected_bucket_owner: None,
+    };
+
+    let h = &ctx.headers;
+    h.assign_str(
+        &*X_AMZ_EXPECTED_BUCKET_OWNER,
+        &mut input.expected_bucket_owner,
+    );
+
+    Ok(input)
 }
 
 impl S3Output for HeadBucketOutput {

@@ -119,7 +119,7 @@ impl<'a> S3Path<'a> {
         }
 
         let mut iter = path.split('/');
-        let _ = iter.next().ok_or_else(|| ParseS3PathError {
+        let _ = iter.next().ok_or(ParseS3PathError {
             kind: S3PathErrorKind::InvalidPath,
         })?;
 
@@ -165,13 +165,13 @@ impl<'a> S3Path<'a> {
     /// is bucket
     #[must_use]
     pub const fn is_bucket(&self) -> bool {
-        matches!(*self, Self::Bucket{..})
+        matches!(*self, Self::Bucket { .. })
     }
 
     /// is object
     #[must_use]
     pub const fn is_object(&self) -> bool {
-        matches!(*self, Self::Object{..})
+        matches!(*self, Self::Object { .. })
     }
 }
 

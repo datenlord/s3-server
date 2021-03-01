@@ -176,4 +176,7 @@ declare_header_name! {
 
     /// x-amz-abort-rule-id
     X_AMZ_ABORT_RULE_ID: "x-amz-abort-rule-id";
+
+    /// x-amz-expected-bucket-owner
+    X_AMZ_EXPECTED_BUCKET_OWNER: "x-amz-expected-bucket-owner";
 }

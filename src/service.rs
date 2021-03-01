@@ -329,49 +329,50 @@ async fn check_post_signature(
     let multipart = multipart::transform_multipart(body, boundary.as_str().as_bytes())
         .await
         .map_err(|err| invalid_request!("Invalid multipart/form-data body", err))?;
+    {
+        let (policy, x_amz_algorithm, x_amz_credential, x_amz_date, x_amz_signature) = {
+            match find_info(&multipart) {
+                None => return Err(invalid_request!("Missing required fields")),
+                Some(ans) => ans,
+            }
+        };
 
-    let (policy, x_amz_algorithm, x_amz_credential, x_amz_date, x_amz_signature) = {
-        match find_info(&multipart) {
-            None => return Err(invalid_request!("Missing required fields")),
-            Some(ans) => ans,
+        // check policy
+        if !crypto::is_base64_encoded(policy.as_bytes()) {
+            return Err(invalid_request!("Invalid field: policy"));
         }
-    };
 
-    // check policy
-    if !crypto::is_base64_encoded(policy.as_bytes()) {
-        return Err(invalid_request!("Invalid field: policy"));
-    }
+        // check x_amz_algorithm
+        if x_amz_algorithm != "AWS4-HMAC-SHA256" {
+            return Err(not_supported!(
+                "x-amz-algorithm other than AWS4-HMAC-SHA256 is not supported."
+            ));
+        }
 
-    // check x_amz_algorithm
-    if x_amz_algorithm != "AWS4-HMAC-SHA256" {
-        return Err(not_supported!(
-            "x-amz-algorithm other than AWS4-HMAC-SHA256 is not supported."
-        ));
-    }
+        // check x_amz_credential
+        let (_, credential) = CredentialV4::parse_by_nom(x_amz_credential)
+            .map_err(|_err| invalid_request!("Invalid field: x-amz-credential"))?;
 
-    // check x_amz_credential
-    let (_, credential) = CredentialV4::parse_by_nom(x_amz_credential)
-        .map_err(|_| invalid_request!("Invalid field: x-amz-credential"))?;
+        // check x_amz_date
+        let amz_date = AmzDate::from_header_str(x_amz_date)
+            .map_err(|err| invalid_request!("Invalid field: x-amz-date", err))?;
 
-    // check x_amz_date
-    let amz_date = AmzDate::from_header_str(x_amz_date)
-        .map_err(|err| invalid_request!("Invalid field: x-amz-date", err))?;
+        // fetch secret_key
+        let secret_key = fetch_secret_key(auth_provider, credential.access_key_id).await?;
 
-    // fetch secret_key
-    let secret_key = fetch_secret_key(auth_provider, credential.access_key_id).await?;
+        // calculate signature
+        let string_to_sign = policy;
+        let signature = signature_v4::calculate_signature(
+            string_to_sign,
+            &secret_key,
+            &amz_date,
+            credential.aws_region,
+        );
 
-    // calculate signature
-    let string_to_sign = policy;
-    let signature = signature_v4::calculate_signature(
-        string_to_sign,
-        &secret_key,
-        &amz_date,
-        credential.aws_region,
-    );
-
-    // check x_amz_signature
-    if signature != x_amz_signature {
-        return Err(signature_mismatch!());
+        // check x_amz_signature
+        if signature != x_amz_signature {
+            return Err(signature_mismatch!());
+        }
     }
 
     // store ctx value

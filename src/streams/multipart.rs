@@ -302,18 +302,19 @@ impl FileStream {
                                     bytes.truncate(idx);
                                     y.yield_ok(bytes).await;
                                     return Ok(());
-                                } else {
-                                    continue;
                                 }
-                            } else if crlf_pat.starts_with(remaining) {
+                                continue;
+                            }
+
+                            if crlf_pat.starts_with(remaining) {
                                 y.yield_ok(bytes.split_to(idx)).await;
                                 buf.extend_from_slice(&*bytes);
                                 bytes.clear();
                                 state = 3;
                                 continue 'dfa;
-                            } else {
-                                continue;
                             }
+
+                            continue;
                         }
 
                         y.yield_ok(mem::take(&mut bytes)).await;
@@ -412,9 +413,8 @@ impl<'a> CrlfLines<'a> {
 
                 self.slice = lines.slice;
                 return Some(ans);
-            } else {
-                len = len.wrapping_add(line.len()).saturating_add(2);
             }
+            len = len.wrapping_add(line.len()).saturating_add(2);
         }
     }
 }
