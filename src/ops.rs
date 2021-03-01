@@ -1,5 +1,7 @@
 //! S3 operations
 
+#![allow(clippy::unnecessary_wraps, clippy::panic_in_result_fn)]
+
 mod complete_multipart_upload;
 mod copy_object;
 mod create_bucket;

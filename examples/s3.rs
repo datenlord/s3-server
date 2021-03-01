@@ -46,9 +46,9 @@ struct Args {
     secret_key: Option<String>,
 }
 
-fn setup_tracing() {
-    use tracing_error::ErrorSubscriber;
-    use tracing_subscriber::subscribe::CollectorExt;
+pub fn setup_tracing() {
+    use tracing_error::ErrorLayer;
+    use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{fmt, EnvFilter};
 
@@ -57,7 +57,7 @@ fn setup_tracing() {
         .with_env_filter(EnvFilter::from_default_env())
         .with_timer(fmt::time::ChronoLocal::rfc3339())
         .finish()
-        .with(ErrorSubscriber::default())
+        .with(ErrorLayer::default())
         .init();
 }
 

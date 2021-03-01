@@ -4,9 +4,10 @@ use super::{wrap_internal_error, ReqContext, S3Handler};
 
 use crate::dto::{GetBucketLocationError, GetBucketLocationOutput, GetBucketLocationRequest};
 use crate::errors::{S3Error, S3Result};
+use crate::headers::X_AMZ_EXPECTED_BUCKET_OWNER;
 use crate::output::S3Output;
 use crate::storage::S3Storage;
-use crate::utils::{Apply, ResponseExt, XmlWriterExt};
+use crate::utils::{ResponseExt, XmlWriterExt};
 use crate::{async_trait, Method, Response};
 
 /// `GetBucketLocation` handler
@@ -36,10 +37,18 @@ impl S3Handler for Handler {
 fn extract(ctx: &mut ReqContext<'_>) -> S3Result<GetBucketLocationRequest> {
     let bucket = ctx.unwrap_bucket_path();
 
-    GetBucketLocationRequest {
+    let mut input = GetBucketLocationRequest {
         bucket: bucket.into(),
-    }
-    .apply(Ok)
+        expected_bucket_owner: None,
+    };
+
+    let h = &ctx.headers;
+    h.assign_str(
+        &*X_AMZ_EXPECTED_BUCKET_OWNER,
+        &mut input.expected_bucket_owner,
+    );
+
+    Ok(input)
 }
 
 impl S3Output for GetBucketLocationOutput {

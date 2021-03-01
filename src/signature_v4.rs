@@ -72,7 +72,7 @@ impl<'a> PresignedUrl<'a> {
             }
             .apply(Some)
         };
-        let info = get_info().ok_or_else(|| ParsePresignedUrlError { _priv: () })?;
+        let info = get_info().ok_or(ParsePresignedUrlError { _priv: () })?;
 
         let algorithm = info.x_amz_algorithm;
 
@@ -82,12 +82,12 @@ impl<'a> PresignedUrl<'a> {
         };
 
         let amz_date = AmzDate::from_header_str(info.x_amz_date)
-            .map_err(|_| ParsePresignedUrlError { _priv: () })?;
+            .map_err(|_err| ParsePresignedUrlError { _priv: () })?;
 
         let expires: u32 = info
             .x_amz_expires
             .parse()
-            .map_err(|_| ParsePresignedUrlError { _priv: () })?;
+            .map_err(|_err| ParsePresignedUrlError { _priv: () })?;
 
         if !info.x_amz_signed_headers.is_ascii() {
             return Err(ParsePresignedUrlError { _priv: () });

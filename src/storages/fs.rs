@@ -621,13 +621,12 @@ impl S3Storage for FileSystem {
                 trace_try!(async_fs::create_dir_all(&object_path).await);
                 let output = PutObjectOutput::default();
                 return Ok(output);
-            } else {
-                let err = code_error!(
-                    UnexpectedContent,
-                    "Unexpected request body when creating a directory object."
-                );
-                return Err(err.into());
             }
+            let err = code_error!(
+                UnexpectedContent,
+                "Unexpected request body when creating a directory object."
+            );
+            return Err(err.into());
         }
 
         let object_path = trace_try!(self.get_object_path(&bucket, &key));
@@ -654,8 +653,10 @@ impl S3Storage for FileSystem {
             trace_try!(self.save_metadata(&bucket, &key, metadata).await);
         }
 
-        let mut output = PutObjectOutput::default(); // TODO: handle other fields
-        output.e_tag = Some(format!("\"{}\"", md5_sum));
+        let output = PutObjectOutput {
+            e_tag: Some(format!("\"{}\"", md5_sum)),
+            ..PutObjectOutput::default()
+        }; // TODO: handle other fields
 
         Ok(output)
     }
@@ -716,8 +717,10 @@ impl S3Storage for FileSystem {
 
         let e_tag = format!("\"{}\"", md5_sum);
 
-        let mut output = UploadPartOutput::default();
-        output.e_tag = Some(e_tag);
+        let output = UploadPartOutput {
+            e_tag: Some(e_tag),
+            ..UploadPartOutput::default()
+        };
 
         Ok(output)
     }

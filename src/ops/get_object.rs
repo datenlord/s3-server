@@ -166,6 +166,9 @@ impl From<GetObjectError> for S3Error {
     fn from(e: GetObjectError) -> Self {
         match e {
             GetObjectError::NoSuchKey(msg) => Self::new(S3ErrorCode::NoSuchKey, msg),
+            GetObjectError::InvalidObjectState(msg) => {
+                Self::new(S3ErrorCode::InvalidObjectState, msg)
+            }
         }
     }
 }

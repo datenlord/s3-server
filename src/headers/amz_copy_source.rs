@@ -62,6 +62,7 @@ impl<'a> AmzCopySource<'a> {
     /// Parses `AmzCopySource` from header
     /// # Errors
     /// Returns an error if the header is invalid
+    #[allow(clippy::clippy::unwrap_in_result)]
     pub fn from_header_str(header: &'a str) -> Result<Self, ParseAmzCopySourceError> {
         // TODO: support access point
         // TODO: use nom parser
