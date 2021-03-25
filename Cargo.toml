@@ -10,13 +10,29 @@ description = "S3 service implementation"
 keywords = ["s3"]
 categories = ["web-programming", "web-programming::http-server"]
 
+[features]
+default = []
+binary = [
+    "anyhow", 
+    "dotenv", 
+    "structopt", 
+    "tokio", 
+    "tracing-subscriber"
+]
+
+[[bin]]
+name = "s3-server"
+required-features = ["binary"]
+
 [dependencies]
+anyhow = { version = "1.0.39", optional = true }
 async-fs = "1.5.0"
 async-trait = "0.1.40"
 backtrace = "0.3.53"
 base64 = "0.13.0"
 chrono = "0.4.15"
 const-str = { version = "0.1.2", features = ["verify-regex"] }
+dotenv = { version = "0.15.0", optional = true }
 faster-hex = "0.5.0"
 futures = "0.3.5"
 hmac = "0.10.1"
@@ -38,16 +54,13 @@ serde_json = "1.0.57"
 serde_urlencoded = "0.7.0"
 sha2 = "0.9.1"
 smallvec = "1.4.2"
+structopt = { version = "0.3.17", optional = true }
 thiserror = "1.0.20"
+tokio = { version = "1.2.0", features = ["full"], optional = true }
 tracing = "0.1.25"
 tracing-error = "0.1.2"
 tracing-futures = "0.2.5"
+tracing-subscriber = { version = "0.2.16", optional = true }
 transform-stream = "0.1.2"
 uuid = { version = "0.8.1", features = ["v4"] }
 xml-rs = "0.8.3"
-
-[dev-dependencies]
-anyhow = "1.0.32"
-structopt = "0.3.17"
-tokio = { version = "1.2.0", features = ["full"] }
-tracing-subscriber = "0.2.16"
