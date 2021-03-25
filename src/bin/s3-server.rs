@@ -2,7 +2,7 @@
 //! s3-server 0.1.0-dev
 //!
 //! USAGE:
-//!     s3 [OPTIONS]
+//!     s3-server [OPTIONS]
 //!
 //! FLAGS:
 //!     -h, --help       Prints help information
@@ -63,6 +63,7 @@ pub fn setup_tracing() {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    dotenv::dotenv().ok();
     setup_tracing();
 
     let args: Args = Args::from_args();

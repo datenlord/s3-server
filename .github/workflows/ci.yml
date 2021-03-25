@@ -119,14 +119,14 @@ jobs:
           docker build -t minio/mint . -f Dockerfile.mint
           popd
 
-      - name: Build example s3
+      - name: Build s3-server
         uses: actions-rs/cargo@v1
         with:
           command: build 
-          args: --example s3 --release
+          args: --features binary --bins --release
 
       - name: Run mint
         run: |
           mkdir data
-          RUST_LOG=info ./scripts/s3-auth.sh data 1>/dev/null &
+          RUST_LOG=info ./scripts/s3-server.sh data --release 1>/dev/null &
           ./scripts/mint.sh
