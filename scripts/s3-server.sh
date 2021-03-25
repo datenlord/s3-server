@@ -5,7 +5,9 @@ if [ -n "$1" ]; then
 fi
 
 RELEASE=""
-RELEASE="--release"
+if [ "$2" == "--release" ]; then
+    RELEASE="--release"
+fi
 
 cargo run $RELEASE --features binary \
     -- \

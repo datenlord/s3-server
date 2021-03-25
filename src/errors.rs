@@ -60,6 +60,9 @@ impl Display for S3Error {
         if let Some(ref source) = self.0.source {
             write!(f, "\nsource: {}", source)?;
         }
+        if let Some(ref backtrace) = self.0.backtrace {
+            write!(f, "\nbacktrace:\n{:?}", backtrace)?;
+        }
         Ok(())
     }
 }

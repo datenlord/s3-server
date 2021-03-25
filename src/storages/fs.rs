@@ -630,6 +630,9 @@ impl S3Storage for FileSystem {
         }
 
         let object_path = trace_try!(self.get_object_path(&bucket, &key));
+        if let Some(dir_path) = object_path.parent() {
+            trace_try!(async_fs::create_dir_all(&dir_path).await)
+        }
 
         let mut md5_hash = Md5::new();
         let stream = body.inspect_ok(|bytes| md5_hash.update(bytes.as_ref()));
