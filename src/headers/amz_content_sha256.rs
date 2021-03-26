@@ -6,6 +6,7 @@ use crate::utils::{crypto, Apply};
 ///
 /// See [Common Request Headers](https://docs.aws.amazon.com/AmazonS3/latest/API/RESTCommonRequestHeaders.html)
 #[derive(Debug)]
+#[allow(clippy::exhaustive_enums)]
 pub enum AmzContentSha256<'a> {
     /// `STREAMING-AWS4-HMAC-SHA256-PAYLOAD`
     MultipleChunks,
