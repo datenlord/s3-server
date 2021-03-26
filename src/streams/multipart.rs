@@ -10,7 +10,6 @@ use std::future::Future;
 use std::io;
 use std::mem;
 use std::pin::Pin;
-use std::str::FromStr;
 
 use futures::stream::{Stream, StreamExt};
 use hyper::body::Bytes;
@@ -50,17 +49,17 @@ impl Multipart {
         })
     }
 
-    /// assign from optional field
-    pub(crate) fn assign<T>(&self, name: &str, opt: &mut Option<T>) -> Result<(), T::Err>
-    where
-        T: FromStr,
-    {
-        if let Some(s) = self.find_field_value(name) {
-            let v = s.parse()?;
-            *opt = Some(v);
-        }
-        Ok(())
-    }
+    // /// assign from optional field
+    // pub(crate) fn assign<T>(&self, name: &str, opt: &mut Option<T>) -> Result<(), T::Err>
+    // where
+    //     T: FromStr,
+    // {
+    //     if let Some(s) = self.find_field_value(name) {
+    //         let v = s.parse()?;
+    //         *opt = Some(v);
+    //     }
+    //     Ok(())
+    // }
 
     /// assign string from optional field
     pub(crate) fn assign_str(&self, name: &str, opt: &mut Option<String>) {
@@ -551,8 +550,7 @@ mod tests {
         let file_content = "file_content";
 
         let body_bytes = {
-            let mut s = Vec::new();
-            s.push(format!("\r\n--{}\r\n", boundary));
+            let mut s = vec![format!("\r\n--{}\r\n", boundary)];
             for &(n, v) in &fields {
                 s.push(format!(
                     concat!(

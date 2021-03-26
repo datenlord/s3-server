@@ -69,7 +69,10 @@ impl Display for S3Error {
 
 impl Error for S3Error {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(self.0.source.as_deref()?)
+        match self.0.source {
+            Some(ref err) => Some(&**err),
+            None => None,
+        }
     }
 }
 
@@ -161,6 +164,7 @@ impl S3ErrorBuilder {
 
 /// Generic s3 error type for storage
 #[derive(Debug)]
+#[allow(clippy::exhaustive_enums)]
 pub enum S3StorageError<E> {
     /// A operation-specific error occurred
     Operation(E),
@@ -194,6 +198,7 @@ pub type S3StorageResult<T, E> = Result<T, S3StorageError<E>>;
 
 /// S3 error type for auth
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum S3AuthError {
     /// Not signed up
     NotSignedUp,
@@ -226,6 +231,8 @@ impl From<S3Error> for S3AuthError {
 ///
 /// See [`ErrorResponses`](https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html)
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::upper_case_acronyms)]
+#[non_exhaustive]
 pub enum S3ErrorCode {
     /// Access Denied
     AccessDenied,

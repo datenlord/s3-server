@@ -10,6 +10,7 @@ use smallvec::SmallVec;
 
 /// Authorization
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(clippy::exhaustive_structs)]
 pub struct AuthorizationV4<'a> {
     /// The algorithm that was used to calculate the signature.
     pub algorithm: &'a str,
@@ -31,6 +32,7 @@ pub struct AuthorizationV4<'a> {
 ///
 /// See [sigv4-auth-using-authorization-header](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-auth-using-authorization-header.html)
 #[derive(Debug, Serialize, Deserialize)]
+#[allow(clippy::exhaustive_structs)]
 pub struct CredentialV4<'a> {
     /// access key id
     pub access_key_id: &'a str,

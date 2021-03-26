@@ -7,6 +7,7 @@ use std::net::IpAddr;
 
 /// A path in the S3 storage
 #[derive(Debug)]
+#[allow(clippy::clippy::exhaustive_enums)]
 pub enum S3Path<'a> {
     /// Root path
     Root,
@@ -47,6 +48,7 @@ impl ParseS3PathError {
 
 /// A list of `ParseS3PathError` reasons
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum S3PathErrorKind {
     /// The request is not a valid path-style request
     InvalidPath,

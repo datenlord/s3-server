@@ -6,6 +6,7 @@ use regex::Regex;
 
 /// x-amz-copy-source
 #[derive(Debug)]
+#[allow(clippy::clippy::exhaustive_enums)]
 pub enum AmzCopySource<'a> {
     /// bucket repr
     Bucket {
@@ -62,7 +63,7 @@ impl<'a> AmzCopySource<'a> {
     /// Parses `AmzCopySource` from header
     /// # Errors
     /// Returns an error if the header is invalid
-    #[allow(clippy::clippy::unwrap_in_result)]
+    #[allow(clippy::unwrap_in_result, clippy::missing_panics_doc)]
     pub fn from_header_str(header: &'a str) -> Result<Self, ParseAmzCopySourceError> {
         // TODO: support access point
         // TODO: use nom parser

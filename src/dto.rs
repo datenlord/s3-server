@@ -19,12 +19,15 @@ pub use rusoto_s3::{
 
 /// `DeleteBucketOutput`
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::exhaustive_structs)]
 pub struct DeleteBucketOutput;
 
 /// `HeadBucketOutput`
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::exhaustive_structs)]
 pub struct HeadBucketOutput;
 
 /// `HeadBucketOutput`
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::exhaustive_structs)]
 pub struct ListBucketsRequest;

@@ -45,13 +45,6 @@
     clippy::unwrap_used, // Tests need `unwrap`
     clippy::indexing_slicing, // Fail fast
 ))]
-#![allow(
-    // FIXME: Deny lints below
-    clippy::multiple_crate_versions,
-
-    dead_code, // TODO: remove it
-    clippy::todo, // TODO: remove it
-)]
 
 #[macro_use]
 mod internal_macros;
@@ -62,6 +55,7 @@ mod data_structures;
 mod ops;
 mod output;
 mod signature_v4;
+mod streams;
 
 mod auth;
 mod service;
@@ -76,7 +70,6 @@ pub mod errors;
 pub mod headers;
 pub mod path;
 pub mod storages;
-pub mod streams;
 
 /// Request type
 pub(crate) type Request = hyper::Request<Body>;
