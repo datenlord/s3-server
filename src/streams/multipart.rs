@@ -16,7 +16,7 @@ use hyper::body::Bytes;
 use memchr::memchr_iter;
 use transform_stream::{AsyncTryStream, Yielder};
 
-/// form file
+/// Form file
 #[derive(Debug)]
 pub struct File {
     /// name
@@ -37,7 +37,7 @@ pub struct Multipart {
 }
 
 impl Multipart {
-    /// find field value
+    /// Finds field value
     #[must_use]
     pub fn find_field_value<'a>(&'a self, name: &str) -> Option<&'a str> {
         self.fields.iter().rev().find_map(|&(ref n, ref v)| {
@@ -61,7 +61,7 @@ impl Multipart {
     //     Ok(())
     // }
 
-    /// assign string from optional field
+    /// Assigns string from optional field
     pub(crate) fn assign_str(&self, name: &str, opt: &mut Option<String>) {
         if let Some(s) = self.find_field_value(name) {
             *opt = Some(s.to_owned());

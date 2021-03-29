@@ -6,7 +6,7 @@ use regex::Regex;
 
 /// x-amz-copy-source
 #[derive(Debug)]
-#[allow(clippy::clippy::exhaustive_enums)]
+#[allow(clippy::exhaustive_enums)]
 pub enum AmzCopySource<'a> {
     /// bucket repr
     Bucket {

@@ -6,7 +6,7 @@ edition = "2018"
 license = "MIT"
 repository = "https://github.com/datenlord/s3-server"
 readme = "README.md"
-description = "S3 service implementation"
+description = "An experimental generic S3 server"
 keywords = ["s3"]
 categories = ["web-programming", "web-programming::http-server"]
 

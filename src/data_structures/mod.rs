@@ -1,4 +1,4 @@
-//! data structures
+//! Internal data structures
 
 mod bytes_stream;
 mod ordered_headers;
