@@ -10,7 +10,7 @@ use smallvec::SmallVec;
 /// Immutable http header container
 #[derive(Debug)]
 pub struct OrderedHeaders<'a> {
-    /// ascending headers (header names are lowercase)
+    /// Ascending headers (header names are lowercase)
     headers: SmallVec<[(&'a str, &'a str); 16]>,
 }
 
@@ -40,7 +40,7 @@ impl<'a> OrderedHeaders<'a> {
         Ok(Self { headers })
     }
 
-    /// signed headers must be sorted
+    /// + Signed headers must be sorted
     pub fn map_signed_headers(&self, signed_headers: &[impl AsRef<str>]) -> Self {
         let mut headers: SmallVec<[(&'a str, &'a str); 16]> = SmallVec::new();
         for &(name, value) in self.headers.iter() {
@@ -54,7 +54,7 @@ impl<'a> OrderedHeaders<'a> {
         Self { headers }
     }
 
-    /// Get header value by name. Time `O(logn)`
+    /// Gets header value by name. Time `O(logn)`
     pub fn get(&self, name: impl AsHeaderName) -> Option<&'a str> {
         let headers = self.headers.as_slice();
         let ans = match headers.binary_search_by_key(&name.as_str(), |&(n, _)| n) {
@@ -65,7 +65,7 @@ impl<'a> OrderedHeaders<'a> {
         ans
     }
 
-    /// assign from optional header
+    /// Assigns value from optional header
     pub fn assign<T: FromStr>(
         &self,
         name: impl AsHeaderName,
@@ -78,7 +78,7 @@ impl<'a> OrderedHeaders<'a> {
         Ok(())
     }
 
-    /// assign string from optional header
+    /// Assigns string from optional header
     pub fn assign_str(&self, name: impl AsHeaderName, opt: &mut Option<String>) {
         if let Some(s) = self.get(name) {
             *opt = Some(s.to_owned())

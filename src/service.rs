@@ -442,8 +442,10 @@ async fn check_header_auth(
     ctx: &mut ReqContext<'_>,
     auth: Option<&(dyn S3Auth + Send + Sync)>,
 ) -> S3Result<()> {
-    let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?
-        .ok_or_else(|| invalid_request!("Missing header: x-amz-content-sha256"))?;
+    let amz_content_sha256 = match extract_amz_content_sha256(&ctx.headers)? {
+        Some(h) => h,
+        None => return Ok(()),
+    };
 
     // --- header auth ---
     let is_stream = match amz_content_sha256 {

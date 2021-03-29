@@ -34,8 +34,10 @@ use tracing::{debug, info};
 struct Args {
     #[structopt(long, default_value = ".")]
     fs_root: PathBuf,
+
     #[structopt(long, default_value = "localhost")]
     host: String,
+
     #[structopt(long, default_value = "8014")]
     port: u16,
 

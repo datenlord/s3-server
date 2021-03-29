@@ -9,7 +9,7 @@ use smallvec::SmallVec;
 /// Immutable query string container
 #[derive(Debug)]
 pub struct OrderedQs {
-    /// ascending query strings
+    /// Ascending query strings
     qs: SmallVec<[(String, String); 16]>,
 }
 
@@ -31,7 +31,7 @@ impl OrderedQs {
             .apply(|qs| Ok(Self { qs: qs.into() }))
     }
 
-    /// Get query value by name. Time `O(logn)`
+    /// Gets query value by name. Time `O(logn)`
     pub fn get(&self, name: &str) -> Option<&str> {
         let qs = self.qs.as_ref();
         match qs.binary_search_by_key(&name, |&(ref n, _)| n.as_str()) {
@@ -40,7 +40,7 @@ impl OrderedQs {
         }
     }
 
-    /// assign from optional query
+    /// Assigns value from optional query
     pub fn assign<T: FromStr>(&self, name: &str, opt: &mut Option<T>) -> Result<(), T::Err> {
         if let Some(s) = self.get(name) {
             let v = s.parse()?;
@@ -49,7 +49,7 @@ impl OrderedQs {
         Ok(())
     }
 
-    /// assign string from optional query
+    /// Assigns string from optional query
     pub fn assign_str(&self, name: &str, opt: &mut Option<String>) {
         if let Some(s) = self.get(name) {
             *opt = Some(s.to_owned())
