@@ -16,6 +16,8 @@
 //!         --secret-key <secret-key>
 //! ```
 
+#![forbid(unsafe_code)]
+
 use s3_server::storages::fs::FileSystem;
 use s3_server::S3Service;
 use s3_server::SimpleAuth;

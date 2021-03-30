@@ -4,6 +4,7 @@
 [![MIT licensed][mit-badge]][mit-url]
 [![Docs][docs-badge]][docs-url]
 ![CI][ci-badge]
+[![Unsafe Forbidden][unsafe-forbidden-badge]][unsafe-forbidden-url]
 
 [crates-badge]: https://img.shields.io/crates/v/s3-server.svg
 [crates-url]: https://crates.io/crates/s3-server
@@ -12,6 +13,8 @@
 [docs-badge]: https://docs.rs/s3-server/badge.svg
 [docs-url]: https://docs.rs/s3-server/
 [ci-badge]: https://github.com/datenlord/s3-server/workflows/CI/badge.svg
+[unsafe-forbidden-badge]: https://img.shields.io/badge/unsafe-forbidden-success.svg
+[unsafe-forbidden-url]: https://github.com/rust-secure-code/safety-dance/
 
 An experimental generic S3 server
 
