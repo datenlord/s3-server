@@ -21,7 +21,7 @@ tokio = { version = "0.2.22", default-features = false }
 hyper = "0.13.7"
 futures = "0.3.5"
 thiserror = "1.0.20"
-rusoto_core = "0.45.0"
+rusoto_core = "0.46.0"
 rusoto_s3 = "0.45.0"
 async-trait = "0.1.40"
 log = "0.4.11"
