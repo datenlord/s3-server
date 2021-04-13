@@ -17,7 +17,7 @@ rt-tokio = []
 
 [dependencies]
 async-std = { version = "1.6.3", optional = true }
-tokio = { version = "0.2.22", default-features = false }
+tokio = { version = "1.5.0", default-features = false }
 hyper = "0.13.7"
 futures = "0.3.5"
 thiserror = "1.0.20"
@@ -52,7 +52,7 @@ md-5 = "0.9.1"
 uuid = { version = "0.8.1", features = ["v4"] }
 
 [dev-dependencies]
-tokio = { version = "0.2.22", features = ["full"] }
+tokio = { version = "1.5.0", features = ["full"] }
 async-std = { version = "1.6.3", features = ["tokio02", "attributes"] }
 futures-timer = "3.0.2"
 anyhow = "1.0.32"
