@@ -9,7 +9,7 @@ on:
 name: CI
 
 env:
-  CI_RUST_TOOLCHAIN: stable
+  CI_RUST_TOOLCHAIN: 1.51
 
 jobs:
   check:
