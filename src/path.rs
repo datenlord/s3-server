@@ -6,8 +6,8 @@
 use std::net::IpAddr;
 
 /// A path in the S3 storage
+#[allow(clippy::exhaustive_enums)]
 #[derive(Debug)]
-#[allow(clippy::clippy::exhaustive_enums)]
 pub enum S3Path<'a> {
     /// Root path
     Root,
@@ -180,7 +180,6 @@ impl<'a> S3Path<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::iter;
 
     #[test]
     fn parse_s3_path() {
@@ -219,11 +218,7 @@ mod tests {
             &S3PathErrorKind::InvalidBucketName
         );
 
-        let too_long_path = format!(
-            "/{}/{}",
-            "asd",
-            iter::repeat('b').take(2048).collect::<String>().as_str()
-        );
+        let too_long_path = format!("/{}/{}", "asd", "b".repeat(2048).as_str());
 
         assert_eq!(
             S3Path::try_from_path(&too_long_path).unwrap_err().kind(),

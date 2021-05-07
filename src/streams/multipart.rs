@@ -40,13 +40,10 @@ impl Multipart {
     /// Finds field value
     #[must_use]
     pub fn find_field_value<'a>(&'a self, name: &str) -> Option<&'a str> {
-        self.fields.iter().rev().find_map(|&(ref n, ref v)| {
-            if n.eq_ignore_ascii_case(name) {
-                Some(v.as_str())
-            } else {
-                None
-            }
-        })
+        self.fields
+            .iter()
+            .rev()
+            .find_map(|&(ref n, ref v)| n.eq_ignore_ascii_case(name).then(|| v.as_str()))
     }
 
     // /// assign from optional field
@@ -105,7 +102,7 @@ where
         };
 
         // try to parse
-        match try_parse(body, pat, &buf, &mut fields, boundary).await {
+        match try_parse(body, pat, &buf, &mut fields, boundary) {
             Err((b, p)) => {
                 body = b;
                 pat = p;
@@ -116,7 +113,8 @@ where
 }
 
 /// try to parse data buffer, pat: b"--{boundary}\r\n"
-async fn try_parse<S>(
+#[allow(clippy::type_complexity)]
+fn try_parse<S>(
     body: Pin<Box<S>>,
     pat: Box<[u8]>,
     buf: &'_ [u8],
@@ -167,9 +165,9 @@ where
         let mut content_type_bytes = None;
         for header in parsed_headers {
             if header.name.eq_ignore_ascii_case("Content-Disposition") {
-                content_disposition_bytes = Some(header.value)
+                content_disposition_bytes = Some(header.value);
             } else if header.name.eq_ignore_ascii_case("Content-Type") {
-                content_type_bytes = Some(header.value)
+                content_type_bytes = Some(header.value);
             } else {
                 continue;
             }
@@ -469,7 +467,7 @@ mod tests {
         let mut buf = Vec::new();
 
         while let Some(bytes) = file_stream.next().await {
-            buf.extend(bytes?)
+            buf.extend(bytes?);
         }
 
         Ok(buf.into())
@@ -524,8 +522,10 @@ mod tests {
             Some(Bytes::copy_from_slice(b"\r")),
         );
 
-        let file_bytes = aggregate_file_stream(file_stream).await.unwrap();
-        assert_eq!(file_bytes, file_content);
+        {
+            let file_bytes = aggregate_file_stream(file_stream).await.unwrap();
+            assert_eq!(file_bytes, file_content);
+        }
     }
 
     #[tokio::test]
@@ -603,7 +603,9 @@ mod tests {
 
         let file_bytes = aggregate_file_stream(ans.file.stream).await.unwrap();
 
-        assert_eq!(file_bytes, file_content);
+        {
+            assert_eq!(file_bytes, file_content);
+        }
     }
 
     #[tokio::test]
@@ -696,7 +698,9 @@ mod tests {
             "4Iq85RV\n4uskvQ5CLZTtWQKJq6WDlZJWnVuA1qQqFVFWs/p02teDX/XOQpgW1I9trzHjOF8+AjI",
         );
 
-        let file_bytes = aggregate_file_stream(ans.file.stream).await.unwrap();
-        assert_eq!(file_bytes, file_content);
+        {
+            let file_bytes = aggregate_file_stream(ans.file.stream).await.unwrap();
+            assert_eq!(file_bytes, file_content);
+        }
     }
 }

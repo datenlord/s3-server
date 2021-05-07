@@ -69,7 +69,7 @@ fn extract_from_multipart(input: &mut PutObjectRequest, mut multipart: Multipart
         if name.starts_with(meta_prefix) {
             let (_, meta_key) = name.split_at(meta_prefix.len());
             if !meta_key.is_empty() {
-                let _ = metadata.insert(meta_key.to_owned(), mem::take(value));
+                let _prev = metadata.insert(meta_key.to_owned(), mem::take(value));
             }
         }
     }
@@ -182,7 +182,7 @@ fn extract(ctx: &mut ReqContext<'_>) -> S3Result<PutObjectRequest> {
         if name.starts_with(meta_prefix) {
             let (_, meta_key) = name.split_at(meta_prefix.len());
             if !meta_key.is_empty() {
-                let _ = metadata.insert(meta_key.to_owned(), value.to_owned());
+                let _prev = metadata.insert(meta_key.to_owned(), value.to_owned());
             }
         }
     }

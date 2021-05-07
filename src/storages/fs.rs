@@ -291,7 +291,7 @@ impl S3Storage for FileSystem {
         for object in input.delete.objects {
             let path = trace_try!(self.get_object_path(&input.bucket, &object.key));
             if path.exists() {
-                objects.push((path, object.key))
+                objects.push((path, object.key));
             }
         }
 
@@ -440,7 +440,7 @@ impl S3Storage for FileSystem {
                     buckets.push(Bucket {
                         creation_date: None,
                         name: Some(name.into()),
-                    })
+                    });
                 }
             }
         }
@@ -631,7 +631,7 @@ impl S3Storage for FileSystem {
 
         let object_path = trace_try!(self.get_object_path(&bucket, &key));
         if let Some(dir_path) = object_path.parent() {
-            trace_try!(async_fs::create_dir_all(&dir_path).await)
+            trace_try!(async_fs::create_dir_all(&dir_path).await);
         }
 
         let mut md5_hash = Md5::new();

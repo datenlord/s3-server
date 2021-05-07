@@ -115,11 +115,7 @@ fn check_signature(
         &ctx.region,
     );
 
-    if chunk_signature.as_bytes() == expected_signature {
-        Some(chunk_signature.into())
-    } else {
-        None
-    }
+    (chunk_signature.as_bytes() == expected_signature).then(|| chunk_signature.into())
 }
 
 impl AwsChunkedStream {
@@ -176,7 +172,7 @@ impl AwsChunkedStream {
                 }
 
                 for bytes in data {
-                    y.yield_ok(bytes).await
+                    y.yield_ok(bytes).await;
                 }
             }
 
@@ -328,7 +324,7 @@ mod tests {
             .also(|b| b.extend_from_slice(b"\r\n"))
             .into();
 
-        let chunks = vec![Ok(chunk1), Ok(chunk2), Ok(chunk3)];
+        let chunk_results: Vec<Result<Bytes, _>> = vec![Ok(chunk1), Ok(chunk2), Ok(chunk3)];
 
         let seed_signature = "4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9";
         let timestamp = "20130524T000000Z";
@@ -337,7 +333,7 @@ mod tests {
 
         let date = AmzDate::from_header_str(timestamp).unwrap();
 
-        let stream = futures::stream::iter(chunks.into_iter());
+        let stream = futures::stream::iter(chunk_results.into_iter());
         let mut chunked_stream = AwsChunkedStream::new(
             stream,
             seed_signature.into(),
@@ -352,8 +348,10 @@ mod tests {
         let ans2 = chunked_stream.next().await.unwrap();
         assert_eq!(ans2.unwrap(), chunk2_data.as_slice());
 
-        assert!(chunked_stream.next().await.is_none());
-        assert!(chunked_stream.next().await.is_none());
-        assert!(chunked_stream.next().await.is_none());
+        {
+            assert!(chunked_stream.next().await.is_none());
+            assert!(chunked_stream.next().await.is_none());
+            assert!(chunked_stream.next().await.is_none());
+        }
     }
 }

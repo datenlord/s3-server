@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 
 /// convert bytes to hex string
 pub fn to_hex_string(src: impl AsRef<[u8]>) -> String {
-    faster_hex::hex_string(src.as_ref()).unwrap_or_else(|e| panic!("{}", e))
+    faster_hex::hex_string(src.as_ref())
 }
 
 /// verify sha256 checksum string
