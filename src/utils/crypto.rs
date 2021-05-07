@@ -41,8 +41,8 @@ pub fn hex_sha256_chunk(chunk_data: &[Bytes]) -> String {
 
 /// `hmac_sha256(key, data)`
 pub fn hmac_sha256(key: &[u8], data: &[u8]) -> impl AsRef<[u8]> {
-    let m =
-        <Hmac<Sha256>>::new_varkey(key).unwrap_or_else(|_| panic!("HMAC can take key of any size"));
+    let m = <Hmac<Sha256>>::new_from_slice(key)
+        .unwrap_or_else(|_| panic!("HMAC can take key of any size"));
     m.also(|m| m.update(data.as_ref())).finalize().into_bytes()
 }
 
