@@ -51,14 +51,14 @@ impl ResponseExt for Response {
     ) -> Result<(), InvalidHeaderValue> {
         if let Some(value) = value {
             let val = HeaderValue::try_from(value)?;
-            let _ = self.headers_mut().insert(name.into_owned_name(), val);
+            let _prev = self.headers_mut().insert(name.into_owned_name(), val);
         }
         Ok(())
     }
 
     fn set_mime(&mut self, mime: &Mime) -> Result<(), InvalidHeaderValue> {
         let val = HeaderValue::try_from(mime.as_ref())?;
-        let _ = self.headers_mut().insert(header::CONTENT_TYPE, val);
+        let _prev = self.headers_mut().insert(header::CONTENT_TYPE, val);
         Ok(())
     }
 
@@ -96,7 +96,7 @@ impl ResponseExt for Response {
         for (name, value) in metadata {
             let header_name = HeaderName::from_bytes(format!("x-amz-meta-{}", name).as_bytes())?;
             let header_value = HeaderValue::from_bytes(value.as_bytes())?;
-            let _ = headers.insert(header_name, header_value);
+            let _prev = headers.insert(header_name, header_value);
         }
         Ok(())
     }

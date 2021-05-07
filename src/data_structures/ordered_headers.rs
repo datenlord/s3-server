@@ -73,7 +73,7 @@ impl<'a> OrderedHeaders<'a> {
     ) -> Result<(), T::Err> {
         if let Some(s) = self.get(name) {
             let v = s.parse()?;
-            *opt = Some(v)
+            *opt = Some(v);
         }
         Ok(())
     }
@@ -81,7 +81,7 @@ impl<'a> OrderedHeaders<'a> {
     /// Assigns string from optional header
     pub fn assign_str(&self, name: impl AsHeaderName, opt: &mut Option<String>) {
         if let Some(s) = self.get(name) {
-            *opt = Some(s.to_owned())
+            *opt = Some(s.to_owned());
         }
     }
 }

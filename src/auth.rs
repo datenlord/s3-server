@@ -31,7 +31,7 @@ impl SimpleAuth {
 
     /// register a credential
     pub fn register(&mut self, access_key: String, secret_key: String) {
-        let _ = self.map.insert(access_key, secret_key);
+        let _prev = self.map.insert(access_key, secret_key);
     }
 
     /// lookup a credential

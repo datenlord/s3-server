@@ -56,7 +56,7 @@ fn extract(ctx: &mut ReqContext<'_>) -> S3Result<DeleteObjectRequest> {
     h.assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
 
     if let Some(ref qs) = ctx.query_strings {
-        input.version_id = qs.get("versionId").map(ToOwned::to_owned)
+        input.version_id = qs.get("versionId").map(ToOwned::to_owned);
     }
 
     Ok(input)
