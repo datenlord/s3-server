@@ -44,7 +44,7 @@ impl OrderedQs {
     pub fn assign<T: FromStr>(&self, name: &str, opt: &mut Option<T>) -> Result<(), T::Err> {
         if let Some(s) = self.get(name) {
             let v = s.parse()?;
-            *opt = Some(v)
+            *opt = Some(v);
         }
         Ok(())
     }
@@ -52,7 +52,7 @@ impl OrderedQs {
     /// Assigns string from optional query
     pub fn assign_str(&self, name: &str, opt: &mut Option<String>) {
         if let Some(s) = self.get(name) {
-            *opt = Some(s.to_owned())
+            *opt = Some(s.to_owned());
         }
     }
 }

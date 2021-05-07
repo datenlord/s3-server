@@ -176,7 +176,7 @@ impl AwsChunkedStream {
                 }
 
                 for bytes in data {
-                    y.yield_ok(bytes).await
+                    y.yield_ok(bytes).await;
                 }
             }
 

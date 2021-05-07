@@ -167,9 +167,9 @@ where
         let mut content_type_bytes = None;
         for header in parsed_headers {
             if header.name.eq_ignore_ascii_case("Content-Disposition") {
-                content_disposition_bytes = Some(header.value)
+                content_disposition_bytes = Some(header.value);
             } else if header.name.eq_ignore_ascii_case("Content-Type") {
-                content_type_bytes = Some(header.value)
+                content_type_bytes = Some(header.value);
             } else {
                 continue;
             }
@@ -469,7 +469,7 @@ mod tests {
         let mut buf = Vec::new();
 
         while let Some(bytes) = file_stream.next().await {
-            buf.extend(bytes?)
+            buf.extend(bytes?);
         }
 
         Ok(buf.into())

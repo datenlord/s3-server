@@ -147,7 +147,7 @@ fn uri_encode(output: &mut String, input: &str, encode_slash: bool) {
 
     std::str::from_utf8(buf.as_ref())
         .unwrap_or_else(|_| panic!("an ascii string is always a utf-8 string"))
-        .apply(|s| output.push_str(s))
+        .apply(|s| output.push_str(s));
 }
 
 /// is skipped header
@@ -264,7 +264,7 @@ pub fn create_canonical_request(
                 Payload::SingleChunk(data) => ans.push_str(&crypto::hex_sha256(data)),
                 Payload::MultipleChunks => ans.push_str("STREAMING-AWS4-HMAC-SHA256-PAYLOAD"),
             }
-            drop(payload)
+            drop(payload);
         })
 }
 
@@ -289,7 +289,7 @@ pub fn create_string_to_sign(canonical_request: &str, amz_date: &AmzDate, region
         })
         .also(|ans| {
             // <HashedCanonicalRequest>
-            ans.push_str(&crypto::hex_sha256(canonical_request.as_bytes()))
+            ans.push_str(&crypto::hex_sha256(canonical_request.as_bytes()));
         })
 }
 
@@ -448,7 +448,7 @@ pub fn create_presigned_canonical_request(
         })
         .also(|ans| {
             // <Payload>
-            ans.push_str("UNSIGNED-PAYLOAD")
+            ans.push_str("UNSIGNED-PAYLOAD");
         })
 }
 

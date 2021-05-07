@@ -69,10 +69,10 @@ impl Display for S3Error {
 
 impl Error for S3Error {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self.0.source {
-            Some(ref err) => Some(&**err),
-            None => None,
-        }
+        self.0
+            .source
+            .as_deref()
+            .map(|e| -> &(dyn Error + 'static) { &*e })
     }
 }
 

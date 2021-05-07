@@ -25,42 +25,42 @@ name = "s3-server"
 required-features = ["binary"]
 
 [dependencies]
-anyhow = { version = "1.0.39", optional = true }
+anyhow = { version = "1.0.40", optional = true }
 async-fs = "1.5.0"
-async-trait = "0.1.40"
-backtrace = "0.3.53"
+async-trait = "0.1.50"
+backtrace = "0.3.58"
 base64 = "0.13.0"
-chrono = "0.4.15"
-const-str = { version = "0.1.2", features = ["verify-regex"] }
+chrono = "0.4.19"
+const-str = { version = "0.1.4", features = ["verify-regex"] }
 dotenv = { version = "0.15.0", optional = true }
 faster-hex = "0.5.0"
-futures = "0.3.5"
-hmac = "0.10.1"
-httparse = "1.3.4"
-hyper = { version = "0.14.4", features = ["server"] }
+futures = "0.3.14"
+hmac = "0.11.0"
+httparse = "1.4.0"
+hyper = { version = "0.14.7", features = ["server"] }
 md-5 = "0.9.1"
-memchr = "2.3.3"
+memchr = "2.4.0"
 mime = "0.3.16"
-nom = "6.0.0"
-once_cell = "1.4.1"
-path-absolutize = "3.0.6"
-pin-project-lite = "0.2.4"
+nom = "6.1.2"
+once_cell = "1.7.2"
+path-absolutize = "3.0.10"
+pin-project-lite = "0.2.6"
 quick-xml = { version = "0.22.0", features = ["serialize"] }
-regex = "1.3.9"
+regex = "1.5.4"
 rusoto_core = "0.46.0"
 rusoto_s3 = "0.46.0"
-serde = "1.0.115"
-serde_json = "1.0.57"
+serde = "1.0.125"
+serde_json = "1.0.64"
 serde_urlencoded = "0.7.0"
-sha2 = "0.9.1"
-smallvec = "1.4.2"
-structopt = { version = "0.3.17", optional = true }
-thiserror = "1.0.20"
-tokio = { version = "1.2.0", features = ["full"], optional = true }
-tracing = "0.1.25"
+sha2 = "0.9.4"
+smallvec = "1.6.1"
+structopt = { version = "0.3.21", optional = true }
+thiserror = "1.0.24"
+tokio = { version = "1.5.0", features = ["full"], optional = true }
+tracing = "0.1.26"
 tracing-error = "0.1.2"
 tracing-futures = "0.2.5"
-tracing-subscriber = { version = "0.2.16", optional = true }
+tracing-subscriber = { version = "0.2.18", optional = true }
 transform-stream = "0.1.2"
-uuid = { version = "0.8.1", features = ["v4"] }
+uuid = { version = "0.8.2", features = ["v4"] }
 xml-rs = "0.8.3"

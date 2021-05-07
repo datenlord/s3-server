@@ -88,9 +88,6 @@
     unused_results,
     variant_size_differences,
 
-    // Treat warnings as errors
-    warnings,
-
     // Deny all Clippy lints even Clippy allow some by default
     // https://rust-lang.github.io/rust-clippy/master/
     clippy::all,
