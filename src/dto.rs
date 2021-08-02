@@ -13,7 +13,7 @@ pub use rusoto_s3::{
     GetObjectOutput, GetObjectRequest, HeadBucketError, HeadBucketRequest, HeadObjectError,
     HeadObjectOutput, HeadObjectRequest, ListBucketsError, ListBucketsOutput, ListObjectsError,
     ListObjectsOutput, ListObjectsRequest, ListObjectsV2Error, ListObjectsV2Output,
-    ListObjectsV2Request, Object, ObjectIdentifier, PutObjectError, PutObjectOutput,
+    ListObjectsV2Request, Object, ObjectIdentifier, Owner, PutObjectError, PutObjectOutput,
     PutObjectRequest, UploadPartError, UploadPartOutput, UploadPartRequest,
 };
 
