@@ -39,7 +39,7 @@ impl S3Output for ListBucketsOutput {
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
             res.set_xml_body(4096, |w| {
-                w.stack("ListBucketsOutput", |w| {
+                w.stack("ListAllMyBucketsResult", |w| {
                     w.opt_stack("Buckets", self.buckets, |w, buckets| {
                         for bucket in buckets {
                             w.stack("Bucket", |w| {

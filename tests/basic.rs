@@ -255,27 +255,29 @@ mod success {
 
         assert_eq!(res.status(), StatusCode::OK);
 
-        // FIXME: more generic
-        let ans1 = concat!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-            "<ListBucketsOutput>",
-            "<Buckets>",
-            "<Bucket><Name>asd</Name></Bucket>",
-            "<Bucket><Name>qwe</Name></Bucket>",
-            "</Buckets>",
-            "</ListBucketsOutput>",
-        );
-        let ans2 = concat!(
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
-            "<ListBucketsOutput>",
-            "<Buckets>",
-            "<Bucket><Name>qwe</Name></Bucket>",
-            "<Bucket><Name>asd</Name></Bucket>",
-            "</Buckets>",
-            "</ListBucketsOutput>",
-        );
-
-        assert!(body == ans1 || body == ans2);
+        let parser = xml::EventReader::new(io::Cursor::new(body.as_bytes()));
+        let mut in_name = false;
+        for e in parser {
+            let e = e.unwrap();
+            match e {
+                xml::reader::XmlEvent::StartElement { name, .. } => {
+                    if name.local_name == "Name" {
+                        in_name = true;
+                    }
+                }
+                xml::reader::XmlEvent::EndElement { name } => {
+                    if name.local_name == "Name" {
+                        in_name = false;
+                    }
+                }
+                xml::reader::XmlEvent::Characters(s) => {
+                    if in_name {
+                        assert!(["asd", "qwe"].contains(&s.as_str()));
+                    }
+                }
+                _ => {}
+            }
+        }
 
         Ok(())
     }
