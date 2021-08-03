@@ -317,7 +317,7 @@ pub enum S3ErrorCode {
     InvalidEncryptionAlgorithmError,
 
     /// The specified location constraint is not valid. For more information about Regions,
-    /// see <a href=\"https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html#access-bucket-intro\">How to Select a Region for Your Buckets</a>.
+    /// see [How to Select a Region for Your Buckets](https://docs.aws.amazon.com/AmazonS3/latest/dev/UsingBucket.html#access-bucket-intro).
     InvalidLocationConstraint,
 
     /// The operation is not valid for the current state of the object.
@@ -476,7 +476,7 @@ pub enum S3ErrorCode {
 
     /// The request signature we calculated does not match the signature you provided.
     /// Check your AWS secret access key and signing method.
-    /// For more information, see <a href=\"https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html\">REST Authentication</a> and <a href=\"https://docs.aws.amazon.com/AmazonS3/latest/dev/SOAPAuthentication.html\">SOAP Authentication</a> for details.
+    /// For more information, see [REST Authentication](https://docs.aws.amazon.com/AmazonS3/latest/dev/RESTAuthentication.html) and [SOAP Authentication](https://docs.aws.amazon.com/AmazonS3/latest/dev/SOAPAuthentication.html) for details.
     SignatureDoesNotMatch,
 
     /// Reduce your request rate.
