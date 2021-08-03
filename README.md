@@ -20,6 +20,14 @@ An experimental generic S3 server
 
 ## Install
 
+From cargo:
+
+```
+cargo install s3-server
+```
+
+From source:
+
 ```shell
 git clone https://github.com/datenlord/s3-server
 cd s3-server
@@ -27,8 +35,10 @@ cargo install --features binary --path .
 s3-server --help
 ```
 
+## Usage
+
 ```
-s3-server 0.1.0-dev
+s3-server 0.1.0
 
 USAGE:
     s3-server [OPTIONS]
@@ -44,3 +54,7 @@ OPTIONS:
         --access-key <access-key>    
         --secret-key <secret-key>
 ```
+
+## Debug
+
+Set environment variable `RUST_LOG` to `s3_server=debug`

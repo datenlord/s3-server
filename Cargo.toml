@@ -1,6 +1,6 @@
 [package]
 name = "s3-server"
-version = "0.1.0-dev"
+version = "0.1.0"
 authors = ["Nugine <nugine@foxmail.com>"]
 edition = "2018"
 license = "MIT"
