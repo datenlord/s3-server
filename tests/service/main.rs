@@ -1,29 +1,77 @@
-//! cargo test --test basic -- --test-threads=1
-
 #[macro_use]
-mod common;
+mod utils;
 
-use common::{Request, ResultExt};
+use self::utils::{fs_write_object, generate_path, parse_mime, recv_body_string};
+use self::utils::{Request, ResultExt};
 
 use s3_server::headers::X_AMZ_CONTENT_SHA256;
 use s3_server::path::S3Path;
 use s3_server::storages::fs::FileSystem;
 use s3_server::S3Service;
 
+use std::env;
+use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use hyper::header::HeaderValue;
 use hyper::{Body, Method, StatusCode};
 use tracing::{debug_span, error};
 
-use tokio::fs;
+macro_rules! enter_sync {
+    ($span:expr) => {
+        let __span = $span;
+        let __enter = __span.enter();
+    };
+}
+
+fn setup_tracing() {
+    use tracing_error::ErrorLayer;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    tracing_subscriber::fmt()
+        .event_format(fmt::format::Format::default().pretty())
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_timer(fmt::time::ChronoLocal::rfc3339())
+        .finish()
+        .with(ErrorLayer::default())
+        .try_init()
+        .ok();
+}
+
+fn setup_fs_root(clear: bool) -> Result<PathBuf> {
+    let root: PathBuf = env::var("S3_TEST_FS_ROOT")
+        .unwrap_or_else(|_| "target/s3-test".into())
+        .into();
+
+    enter_sync!(debug_span!("setup fs root", ?clear, root = %root.display()));
+
+    let exists = root.exists();
+    if exists && clear {
+        fs::remove_dir_all(&root)
+            .inspect_err(|err| error!(%err,"failed to remove root directory"))?;
+    }
+
+    if !exists || clear {
+        fs::create_dir_all(&root).inspect_err(|err| error!(%err, "failed to create directory"))?;
+    }
+
+    if !root.exists() {
+        let err = anyhow!("root does not exist");
+        error!(%err);
+        return Err(err);
+    }
+
+    Ok(root)
+}
 
 fn setup_service() -> Result<(PathBuf, S3Service)> {
-    common::setup_tracing();
+    setup_tracing();
 
-    let root = common::setup_fs_root(true).unwrap();
+    let root = setup_fs_root(true).unwrap();
 
     enter_sync!(debug_span!("setup service", root = %root.display()));
 
@@ -35,27 +83,9 @@ fn setup_service() -> Result<(PathBuf, S3Service)> {
     Ok((root, service))
 }
 
-#[tracing::instrument(
-    skip(root),
-    fields(root = %root.as_ref().display()),
-)]
-pub async fn helper_write_object(
-    root: impl AsRef<Path>,
-    bucket: &str,
-    key: &str,
-    content: &str,
-) -> io::Result<()> {
-    let dir_path = common::generate_path(&root, S3Path::Bucket { bucket });
-    if !dir_path.exists() {
-        fs::create_dir(dir_path).await?;
-    }
-    let file_path = common::generate_path(root, S3Path::Object { bucket, key });
-    fs::write(file_path, content).await
-}
-
 mod success {
-
     use super::*;
+
     #[tokio::test]
     async fn get_object() {
         let (root, service) = setup_service().unwrap();
@@ -64,9 +94,7 @@ mod success {
         let key = "qwe";
         let content = "Hello World!";
 
-        helper_write_object(root, bucket, key, content)
-            .await
-            .unwrap();
+        fs_write_object(root, bucket, key, content).unwrap();
 
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::GET;
@@ -79,7 +107,7 @@ mod success {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(body, content);
@@ -93,8 +121,8 @@ mod success {
         let key = "qwe";
         let content = "Hello World!";
 
-        let dir_path = common::generate_path(&root, S3Path::Bucket { bucket });
-        fs::create_dir(dir_path).await.unwrap();
+        let dir_path = generate_path(&root, S3Path::Bucket { bucket });
+        fs::create_dir(dir_path).unwrap();
 
         let mut req = Request::new(Body::from(content));
         *req.method_mut() = Method::PUT;
@@ -107,13 +135,13 @@ mod success {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(body, "");
 
-        let file_path = common::generate_path(root, S3Path::Object { bucket, key });
-        let file_content = fs::read_to_string(file_path).await.unwrap();
+        let file_path = generate_path(root, S3Path::Object { bucket, key });
+        let file_content = fs::read_to_string(file_path).unwrap();
 
         assert_eq!(file_content, content);
 
@@ -128,9 +156,7 @@ mod success {
         let key = "qwe";
         let content = "Hello World!";
 
-        helper_write_object(&root, bucket, key, content)
-            .await
-            .unwrap();
+        fs_write_object(&root, bucket, key, content).unwrap();
 
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::DELETE;
@@ -143,12 +169,12 @@ mod success {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::NO_CONTENT);
         assert_eq!(body, "");
 
-        let file_path = common::generate_path(&root, S3Path::Object { bucket, key });
+        let file_path = generate_path(&root, S3Path::Object { bucket, key });
         assert!(!file_path.exists());
 
         Ok(())
@@ -159,7 +185,7 @@ mod success {
         let (root, service) = setup_service().unwrap();
 
         let bucket = "asd";
-        let dir_path = common::generate_path(root, S3Path::Bucket { bucket });
+        let dir_path = generate_path(root, S3Path::Bucket { bucket });
 
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::PUT;
@@ -170,7 +196,7 @@ mod success {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(body, "");
@@ -185,8 +211,8 @@ mod success {
         let (root, service) = setup_service().unwrap();
 
         let bucket = "asd";
-        let dir_path = common::generate_path(root, S3Path::Bucket { bucket });
-        fs::create_dir(&dir_path).await.unwrap();
+        let dir_path = generate_path(root, S3Path::Bucket { bucket });
+        fs::create_dir(&dir_path).unwrap();
 
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::DELETE;
@@ -197,7 +223,7 @@ mod success {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::NO_CONTENT);
         assert_eq!(body, "");
@@ -212,8 +238,8 @@ mod success {
         let (root, service) = setup_service().unwrap();
 
         let bucket = "asd";
-        let dir_path = common::generate_path(root, S3Path::Bucket { bucket });
-        fs::create_dir(&dir_path).await.unwrap();
+        let dir_path = generate_path(root, S3Path::Bucket { bucket });
+        fs::create_dir(&dir_path).unwrap();
 
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::HEAD;
@@ -224,7 +250,7 @@ mod success {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(body, "");
@@ -238,8 +264,8 @@ mod success {
 
         let buckets = ["asd", "qwe"];
         for &bucket in buckets.iter() {
-            let dir_path = common::generate_path(&root, S3Path::Bucket { bucket });
-            fs::create_dir(&dir_path).await.unwrap();
+            let dir_path = generate_path(&root, S3Path::Bucket { bucket });
+            fs::create_dir(&dir_path).unwrap();
         }
 
         let mut req = Request::new(Body::empty());
@@ -251,7 +277,7 @@ mod success {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
 
@@ -284,7 +310,6 @@ mod success {
 }
 
 mod error {
-
     use super::*;
 
     #[tokio::test]
@@ -305,8 +330,8 @@ mod error {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
-        let mime = common::parse_mime(&res).unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
+        let mime = parse_mime(&res).unwrap();
 
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
         assert_eq!(mime, mime::TEXT_XML);
@@ -337,8 +362,8 @@ mod error {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
-        let mime = common::parse_mime(&res).unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
+        let mime = parse_mime(&res).unwrap();
 
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
         assert_eq!(mime, mime::TEXT_XML);
@@ -361,8 +386,8 @@ mod error {
         let (root, service) = setup_service().unwrap();
 
         let bucket = "asd";
-        let dir_path = common::generate_path(root, S3Path::Bucket { bucket });
-        fs::create_dir(dir_path).await?;
+        let dir_path = generate_path(root, S3Path::Bucket { bucket });
+        fs::create_dir(dir_path)?;
 
         let mut req = Request::new(Body::empty());
         *req.method_mut() = Method::PUT;
@@ -373,8 +398,8 @@ mod error {
         );
 
         let mut res = service.hyper_call(req).await.unwrap();
-        let body = common::recv_body_string(&mut res).await.unwrap();
-        let mime = common::parse_mime(&res).unwrap();
+        let body = recv_body_string(&mut res).await.unwrap();
+        let mime = parse_mime(&res).unwrap();
 
         assert_eq!(res.status(), StatusCode::CONFLICT);
         assert_eq!(mime, mime::TEXT_XML);
