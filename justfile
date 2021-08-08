@@ -1,5 +1,7 @@
 # https://github.com/casey/just
 
+set dotenv-load := true
+
 fmt:
     cargo fmt --all
 
