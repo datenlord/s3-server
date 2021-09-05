@@ -11,7 +11,7 @@ on:
 name: CI
 
 env:
-  CI_RUST_TOOLCHAIN: 1.54
+  CI_RUST_TOOLCHAIN: 1.55
 
 jobs:
   check:
@@ -86,16 +86,16 @@ jobs:
           toolchain: ${{ env.CI_RUST_TOOLCHAIN }}
           override: true
 
-      - name: Check out minio code
+      - name: Check out mint code
         uses: actions/checkout@v2
         with:
-          repository: minio/minio
-          ref: 632252ff1ddc12574cf379240e01ee92651777f6
-          path: ./minio
+          repository: minio/mint
+          ref: ad883407695260e09ddaf309892d9f870e61bc29
+          path: ./mint
 
       - name: Select test groups
         run: |
-          pushd ./minio/mint
+          pushd ./mint
 
           enabled_test_groups=("mc" "s3cmd")
           
@@ -114,12 +114,14 @@ jobs:
           rm remove-packages.list
           touch remove-packages.list
 
+          sed -i 's/mc.${MC_VERSION}/archive\/mc.${MC_VERSION}/' build/mc/install.sh
+
           popd
       
       - name: Build mint
         run: |
-          pushd ./minio
-          docker build -t minio/mint . -f Dockerfile.mint
+          pushd ./mint
+          docker build -t minio/mint . -f Dockerfile
           popd
 
       - name: Build s3-server
