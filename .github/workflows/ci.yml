@@ -115,6 +115,11 @@ jobs:
           touch remove-packages.list
 
           sed -i 's/mc.${MC_VERSION}/archive\/mc.${MC_VERSION}/' build/mc/install.sh
+          
+          # delete tests for minio
+          cat >> build/mc/install.sh << EOF
+          sed -i '/^\s*test_rb\s*$/d' "\$test_run_dir/functional-tests.sh"
+          EOF
 
           popd
       
