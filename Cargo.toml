@@ -61,7 +61,7 @@ tracing = "0.1.26"
 tracing-error = "0.1.2"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.2.18", optional = true }
-transform-stream = "0.1.2"
+transform-stream = "0.2.0"
 uuid = { version = "0.8.2", features = ["v4"] }
 xml-rs = "0.8.3"
 
