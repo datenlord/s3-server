@@ -35,7 +35,7 @@ const-str = { version = "0.2.0", features = ["verify-regex"] }
 dotenv = { version = "0.15.0", optional = true }
 faster-hex = "0.6.0"
 futures = "0.3.14"
-hmac = "0.11.0"
+hmac = "0.12.1"
 httparse = "1.4.0"
 hyper = { version = "0.14.7", features = ["server"] }
 md-5 = "0.9.1"
