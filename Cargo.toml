@@ -38,7 +38,7 @@ futures = "0.3.14"
 hmac = "0.11.0"
 httparse = "1.4.0"
 hyper = { version = "0.14.7", features = ["server"] }
-md-5 = "0.9.1"
+md-5 = "0.10.1"
 memchr = "2.4.0"
 mime = "0.3.16"
 nom = "7.0.0"
