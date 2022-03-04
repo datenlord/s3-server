@@ -104,18 +104,11 @@ impl S3Error {
     }
 
     /// get span trace
-    #[allow(clippy::missing_const_for_fn)] // See <https://github.com/rust-lang/rust-clippy/issues/5995>
+    #[inline]
     #[must_use]
-    pub fn span_trace(&self) -> Option<&SpanTrace> {
+    pub const fn span_trace(&self) -> Option<&SpanTrace> {
         self.0.span_trace.as_ref()
     }
-
-    // /// get backtrace
-    // #[allow(clippy::missing_const_for_fn)] // See <https://github.com/rust-lang/rust-clippy/issues/5995>
-    // #[must_use]
-    // pub fn backtrace(&self) -> Option<&Backtrace> {
-    //     self.0.backtrace.as_ref()
-    // }
 }
 
 /// The builder of `S3Error`
