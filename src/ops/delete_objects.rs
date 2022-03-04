@@ -64,6 +64,7 @@ pub async fn extract(ctx: &mut ReqContext<'_>) -> S3Result<DeleteObjectsRequest>
 }
 
 impl S3Output for DeleteObjectsOutput {
+    #[allow(clippy::shadow_unrelated)]
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
             res.set_optional_header(&*X_AMZ_REQUEST_CHARGED, self.request_charged)?;

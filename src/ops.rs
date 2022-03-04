@@ -33,6 +33,7 @@ use hyper::header::AsHeaderName;
 
 /// setup handlers
 pub fn setup_handlers() -> Vec<Box<dyn S3Handler + Send + Sync + 'static>> {
+    /// helper macro
     macro_rules! zst_handlers{
         [$($m:ident,)+] => {vec![$(Box::new($m::Handler),)+]}
     }

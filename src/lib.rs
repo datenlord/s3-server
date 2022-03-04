@@ -103,6 +103,8 @@
     clippy::module_name_repetitions, // Allowed by default
     clippy::panic, // Panic when fatal failures occur
     clippy::blanket_clippy_restriction_lints,
+    clippy::separated_literal_suffix, // Conflicts with `clippy::unseparated_literal_suffix`
+    clippy::shadow_reuse, // It is a common pattern
 )]
 #![cfg_attr(test, allow(
     clippy::unwrap_used, // Tests need [`unwrap`]

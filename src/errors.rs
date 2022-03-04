@@ -110,12 +110,12 @@ impl S3Error {
         self.0.span_trace.as_ref()
     }
 
-    /// get backtrace
-    #[allow(clippy::missing_const_for_fn)] // See <https://github.com/rust-lang/rust-clippy/issues/5995>
-    #[must_use]
-    pub fn backtrace(&self) -> Option<&Backtrace> {
-        self.0.backtrace.as_ref()
-    }
+    // /// get backtrace
+    // #[allow(clippy::missing_const_for_fn)] // See <https://github.com/rust-lang/rust-clippy/issues/5995>
+    // #[must_use]
+    // pub fn backtrace(&self) -> Option<&Backtrace> {
+    //     self.0.backtrace.as_ref()
+    // }
 }
 
 /// The builder of `S3Error`
@@ -125,6 +125,7 @@ pub struct S3ErrorBuilder(Box<S3ErrorInner>);
 impl S3ErrorBuilder {
     /// set message
     #[inline]
+    #[must_use]
     pub fn message(mut self, msg: impl Into<String>) -> Self {
         self.0.message = Some(msg.into());
         self
@@ -132,6 +133,7 @@ impl S3ErrorBuilder {
 
     /// set error source
     #[inline]
+    #[must_use]
     pub fn source(mut self, e: impl Into<BoxStdError>) -> Self {
         self.0.source = Some(e.into());
         self
@@ -606,6 +608,7 @@ impl S3ErrorCode {
     /// Returns a corresponding string of the error code
     #[must_use]
     pub const fn as_static_str(self) -> &'static str {
+        /// help macro for matching
         macro_rules! map_variant_to_str{
             [$($v:tt,)+]=>{
                 match self {

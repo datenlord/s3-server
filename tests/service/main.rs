@@ -26,8 +26,9 @@ macro_rules! enter_sync {
     };
 }
 
-fn setup_tracing() {
+pub fn setup_tracing() {
     use tracing_error::ErrorLayer;
+    use tracing_subscriber::fmt::time::UtcTime;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::{fmt, EnvFilter};
@@ -35,7 +36,7 @@ fn setup_tracing() {
     tracing_subscriber::fmt()
         .event_format(fmt::format::Format::default().pretty())
         .with_env_filter(EnvFilter::from_default_env())
-        .with_timer(fmt::time::ChronoLocal::rfc3339())
+        .with_timer(UtcTime::rfc_3339())
         .finish()
         .with(ErrorLayer::default())
         .try_init()
@@ -52,11 +53,12 @@ fn setup_fs_root(clear: bool) -> Result<PathBuf> {
     let exists = root.exists();
     if exists && clear {
         fs::remove_dir_all(&root)
-            .inspect_err(|err| error!(%err,"failed to remove root directory"))?;
+            .unstable_inspect_err(|err| error!(%err,"failed to remove root directory"))?;
     }
 
     if !exists || clear {
-        fs::create_dir_all(&root).inspect_err(|err| error!(%err, "failed to create directory"))?;
+        fs::create_dir_all(&root)
+            .unstable_inspect_err(|err| error!(%err, "failed to create directory"))?;
     }
 
     if !root.exists() {
@@ -75,8 +77,8 @@ fn setup_service() -> Result<(PathBuf, S3Service)> {
 
     enter_sync!(debug_span!("setup service", root = %root.display()));
 
-    let fs =
-        FileSystem::new(&root).inspect_err(|err| error!(%err, "failed to create filesystem"))?;
+    let fs = FileSystem::new(&root)
+        .unstable_inspect_err(|err| error!(%err, "failed to create filesystem"))?;
 
     let service = S3Service::new(fs);
 

@@ -16,6 +16,7 @@ pub use hyper::header::*;
 
 use once_cell::sync::Lazy;
 
+/// declare http header names
 macro_rules! declare_header_name{
     {$($(#[$docs:meta])* $n:ident: $s:expr;)+} => {
         $(

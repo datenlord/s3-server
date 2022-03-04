@@ -18,10 +18,9 @@ impl OrderedQs {
     ///
     /// + strings must be url-decoded
     #[cfg(test)]
-    pub fn from_vec_unchecked(v: Vec<(String, String)>) -> Self {
-        Self {
-            qs: v.also(|v| v.sort()).into(),
-        }
+    pub fn from_vec_unchecked(mut v: Vec<(String, String)>) -> Self {
+        v.sort();
+        Self { qs: v.into() }
     }
 
     /// Parses `OrderedQs` from query

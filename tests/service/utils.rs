@@ -13,11 +13,12 @@ pub type Request = hyper::Request<hyper::Body>;
 pub type Response = hyper::Response<hyper::Body>;
 
 pub trait ResultExt<T, E> {
-    fn inspect_err(self, f: impl FnOnce(&mut E)) -> Self;
+    /// See <https://github.com/rust-lang/rust/issues/91345>
+    fn unstable_inspect_err(self, f: impl FnOnce(&mut E)) -> Self;
 }
 
 impl<T, E> ResultExt<T, E> for Result<T, E> {
-    fn inspect_err(mut self, f: impl FnOnce(&mut E)) -> Self {
+    fn unstable_inspect_err(mut self, f: impl FnOnce(&mut E)) -> Self {
         if let Err(ref mut e) = self {
             f(e)
         }

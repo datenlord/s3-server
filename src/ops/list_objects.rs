@@ -60,6 +60,7 @@ fn extract(ctx: &mut ReqContext<'_>) -> S3Result<ListObjectsRequest> {
 }
 
 impl S3Output for ListObjectsOutput {
+    #[allow(clippy::shadow_unrelated)]
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
             res.set_xml_body(4096, |w| {

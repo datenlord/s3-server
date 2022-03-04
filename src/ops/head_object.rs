@@ -89,7 +89,7 @@ impl S3Output for HeadObjectOutput {
 
             res.set_optional_header(
                 LAST_MODIFIED,
-                time::map_opt_rfc3339_to_last_modified(self.last_modified)?,
+                time::map_opt_rfc3339_to_last_modified(self.last_modified.as_deref())?,
             )?;
 
             res.set_optional_header(CONTENT_LENGTH, self.content_length.map(|l| l.to_string()))?;

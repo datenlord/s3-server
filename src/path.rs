@@ -114,25 +114,22 @@ impl<'a> S3Path<'a> {
     /// # Errors
     /// Returns an `Err` if the s3 path is invalid
     pub fn try_from_path(path: &'a str) -> Result<Self, ParseS3PathError> {
-        if !path.starts_with('/') {
+        let path = if let Some(("", x)) = path.split_once('/') {
+            x
+        } else {
             return Err(ParseS3PathError {
                 kind: S3PathErrorKind::InvalidPath,
             });
+        };
+
+        if path.is_empty() {
+            return Ok(S3Path::Root);
         }
 
-        let mut iter = path.split('/');
-        let _ = iter.next().ok_or(ParseS3PathError {
-            kind: S3PathErrorKind::InvalidPath,
-        })?;
-
-        let bucket = match iter.next() {
-            None => {
-                return Err(ParseS3PathError {
-                    kind: S3PathErrorKind::InvalidPath,
-                })
-            }
-            Some("") => return Ok(S3Path::Root),
-            Some(s) => s,
+        let (bucket, key) = match path.split_once('/') {
+            None => (path, None),
+            Some((x, "")) => (x, None),
+            Some((bucket, key)) => (bucket, Some(key)),
         };
 
         if !Self::check_bucket_name(bucket) {
@@ -141,12 +138,9 @@ impl<'a> S3Path<'a> {
             });
         }
 
-        let key = match iter.next() {
-            None | Some("") => return Ok(S3Path::Bucket { bucket }),
-
-            // here can not panic, because `split` ensures `path` has enough length
-            #[allow(clippy::indexing_slicing)]
-            Some(_) => &path[bucket.len().saturating_add(2)..],
+        let key = match key {
+            None => return Ok(S3Path::Bucket { bucket }),
+            Some(k) => k,
         };
 
         if !Self::check_key(key) {

@@ -1,5 +1,6 @@
 //! internal macros
 
+/// lazy-initialized regex
 macro_rules! static_regex {
     ($re: literal) => {{
         use once_cell::sync::Lazy;
@@ -115,6 +116,7 @@ macro_rules! invalid_request {
     }};
 }
 
+/// Create a `SignatureDoesNotMatch` error
 macro_rules! signature_mismatch {
     () => {{
         code_error!(
@@ -124,6 +126,7 @@ macro_rules! signature_mismatch {
     }};
 }
 
+/// Create an internal error
 macro_rules! internal_error {
     ($e:expr) => {{
         let code = $crate::errors::S3ErrorCode::InternalError;

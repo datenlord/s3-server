@@ -30,6 +30,7 @@ where
 }
 
 impl S3Output for XmlErrorResponse {
+    #[allow(clippy::shadow_unrelated)]
     fn try_into_response(self) -> S3Result<Response> {
         let status = self
             .code

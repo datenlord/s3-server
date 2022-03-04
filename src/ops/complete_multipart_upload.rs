@@ -73,6 +73,7 @@ impl From<CompleteMultipartUploadError> for S3Error {
 }
 
 impl S3Output for CompleteMultipartUploadOutput {
+    #[allow(clippy::shadow_unrelated)]
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
             res.set_optional_header(&*X_AMZ_EXPIRATION, self.expiration)?;

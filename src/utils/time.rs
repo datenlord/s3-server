@@ -27,9 +27,9 @@ pub fn rfc3339_to_last_modified(s: &str) -> Result<String, chrono::ParseError> {
 
 /// convert optional rfc3339 to optional `last_modified`
 pub fn map_opt_rfc3339_to_last_modified(
-    s: Option<String>,
+    s: Option<&str>,
 ) -> Result<Option<String>, chrono::ParseError> {
-    s.map(|ref s| rfc3339_to_last_modified(s)).transpose()
+    s.map(rfc3339_to_last_modified).transpose()
 }
 
 /// Returns the output of a future and elapsed time

@@ -12,7 +12,7 @@ use crate::signature_v4;
 use crate::storage::S3Storage;
 use crate::streams::aws_chunked_stream::AwsChunkedStream;
 use crate::streams::multipart::{self, Multipart};
-use crate::utils::{crypto, Also, Apply};
+use crate::utils::{crypto, Apply};
 use crate::{Body, BoxStdError, Method, Mime, Request, Response};
 
 use std::fmt::{self, Debug};
@@ -463,11 +463,15 @@ async fn check_header_auth(
         }
     };
 
-    let auth: AuthorizationV4<'_> = extract_authorization_v4(&ctx.headers)?
-        .ok_or_else(|| invalid_request!("Missing header: Authorization"))?
-        .also(|auth| auth.signed_headers.sort_unstable());
+    let authorization: AuthorizationV4<'_> = {
+        let a = extract_authorization_v4(&ctx.headers)?;
+        let mut a = a.ok_or_else(|| invalid_request!("Missing header: Authorization"))?;
+        a.signed_headers.sort_unstable();
+        a
+    };
 
-    let secret_key = fetch_secret_key(auth_provider, auth.credential.access_key_id).await?;
+    let secret_key =
+        fetch_secret_key(auth_provider, authorization.credential.access_key_id).await?;
 
     let amz_date = extract_amz_date(&ctx.headers)?
         .ok_or_else(|| invalid_request!("Missing header: x-amz-date"))?;
@@ -479,7 +483,9 @@ async fn check_header_auth(
             ctx.query_strings.as_ref().map_or(&[], AsRef::as_ref);
 
         // here requires that `auth.signed_headers` is sorted
-        let headers = ctx.headers.map_signed_headers(&auth.signed_headers);
+        let headers = ctx
+            .headers
+            .map_signed_headers(&authorization.signed_headers);
 
         let canonical_request = if is_stream {
             signature_v4::create_canonical_request(
@@ -513,14 +519,14 @@ async fn check_header_auth(
             ans
         };
 
-        let region = auth.credential.aws_region;
+        let region = authorization.credential.aws_region;
         let string_to_sign =
             signature_v4::create_string_to_sign(&canonical_request, &amz_date, region);
 
         signature_v4::calculate_signature(&string_to_sign, &secret_key, &amz_date, region)
     };
 
-    if signature != auth.signature {
+    if signature != authorization.signature {
         return Err(signature_mismatch!());
     }
 
@@ -531,7 +537,7 @@ async fn check_header_auth(
             body,
             signature.into(),
             amz_date,
-            auth.credential.aws_region.into(),
+            authorization.credential.aws_region.into(),
             secret_key.into(),
         );
 

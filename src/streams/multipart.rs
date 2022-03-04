@@ -134,7 +134,7 @@ where
     // first line
     match lines.next_line() {
         None => return Err((body, pat)),
-        Some([]) => {
+        Some(&[]) => {
             // first boundary
             match lines.next_line() {
                 None => return Err((body, pat)),
@@ -392,7 +392,7 @@ impl<'a> CrlfLines<'a> {
         if self.slice.is_empty() {
             None
         } else {
-            Some(mem::replace(&mut self.slice, &[]))
+            Some(mem::take(&mut self.slice))
         }
     }
 
@@ -492,12 +492,15 @@ mod tests {
     #[test]
     fn split_to() {
         let bytes = b"\r\n----\r\nasd\r\nqwe";
-        let mut lines = CrlfLines { slice: bytes };
-        assert_eq!(lines.split_to(b"----"), Some(b"\r\n".as_ref()));
-        assert_eq!(lines.slice, b"asd\r\nqwe");
-
-        let mut lines = CrlfLines { slice: bytes };
-        assert_eq!(lines.split_to(b"xxx"), None);
+        {
+            let mut lines = CrlfLines { slice: bytes };
+            assert_eq!(lines.split_to(b"----"), Some(b"\r\n".as_ref()));
+            assert_eq!(lines.slice, b"asd\r\nqwe");
+        }
+        {
+            let mut lines = CrlfLines { slice: bytes };
+            assert_eq!(lines.split_to(b"xxx"), None);
+        }
     }
 
     #[tokio::test]
@@ -550,9 +553,9 @@ mod tests {
         let file_content = "file_content";
 
         let body_bytes = {
-            let mut s = vec![format!("\r\n--{}\r\n", boundary)];
+            let mut ss = vec![format!("\r\n--{}\r\n", boundary)];
             for &(n, v) in &fields {
-                s.push(format!(
+                ss.push(format!(
                     concat!(
                         "Content-Disposition: form-data; name=\"{}\"\r\n",
                         "\r\n",
@@ -562,7 +565,7 @@ mod tests {
                     n, v, boundary
                 ));
             }
-            s.push(format!(
+            ss.push(format!(
                 concat!(
                     "Content-Disposition: form-data; name=\"{}\"; filename=\"{}\"\r\n",
                     "Content-Type: {}\r\n",
@@ -572,7 +575,7 @@ mod tests {
                 ),
                 "file", filename, content_type, file_content, boundary
             ));
-            s.push(format!(
+            ss.push(format!(
                 concat!(
                     "Content-Disposition: form-data; name=\"{}\"\r\n",
                     "\r\n",
@@ -582,7 +585,7 @@ mod tests {
                 other_fields[0].0, other_fields[0].1, boundary
             ));
 
-            s.into_iter()
+            ss.into_iter()
                 .map(|s| s.into_bytes().apply(Bytes::from).apply(Ok))
                 .collect::<Vec<io::Result<Bytes>>>()
         };

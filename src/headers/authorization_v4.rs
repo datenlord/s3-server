@@ -44,6 +44,7 @@ pub struct CredentialV4<'a> {
     pub aws_service: &'a str,
 }
 
+/// helper macro for parser
 macro_rules! parse_and_bind {
     (mut $input:expr => $f:expr => $id:pat ) => {
         let $id = $f($input)?.apply(|(__input, output)| {
@@ -95,6 +96,7 @@ impl<'a> CredentialV4<'a> {
         verify(
             all_consuming(tuple((take(4_usize), take(2_usize), take(2_usize)))),
             |&(y, m, d): &(&str, &str, &str)| {
+                /// helper macro
                 macro_rules! parse_num {
                     ($x:expr) => {{
                         match $x.parse() {

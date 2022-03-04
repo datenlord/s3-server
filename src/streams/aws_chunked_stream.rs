@@ -95,7 +95,7 @@ fn parse_chunk_meta(mut input: &[u8]) -> nom::IResult<&[u8], ChunkMeta<'_>> {
         (size_str, signature)
     });
 
-    let (_, size) = map_res(hex_u32, |n| n.try_into())(size_str)?;
+    let (_, size) = map_res(hex_u32, TryInto::try_into)(size_str)?;
 
     Ok((input, ChunkMeta { size, signature }))
 }
@@ -138,6 +138,7 @@ impl AwsChunkedStream {
         let inner =
             AsyncTryStream::<_, _, BoxFuture<'static, Result<(), AwsChunkedStreamError>>>::new(
                 |mut y| {
+                    #[allow(clippy::shadow_same)] // necessary for `pin_mut!`
                     Box::pin(async move {
                         pin_mut!(body);
                         let mut prev_bytes = Bytes::new();
@@ -278,9 +279,9 @@ impl AwsChunkedStream {
             // fast path
             remaining_bytes.advance(2);
         } else {
-            for expected_byte in b"\r\n" {
+            for &expected_byte in b"\r\n" {
                 loop {
-                    match remaining_bytes.as_ref() {
+                    match *remaining_bytes.as_ref() {
                         [] => match body.next().await? {
                             Err(e) => return Some(Err(AwsChunkedStreamError::Io(e))),
                             Ok(bytes) => remaining_bytes = bytes,

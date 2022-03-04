@@ -52,6 +52,7 @@ impl From<CreateMultipartUploadError> for S3Error {
 }
 
 impl S3Output for CreateMultipartUploadOutput {
+    #[allow(clippy::shadow_unrelated)]
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
             res.set_optional_header(&*X_AMZ_ABORT_DATE, self.abort_date)?;

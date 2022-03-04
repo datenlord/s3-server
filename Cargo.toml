@@ -11,7 +11,7 @@ keywords = ["s3"]
 categories = ["web-programming", "web-programming::http-server"]
 
 [features]
-default = []
+default = ["binary"]
 binary = [
     "anyhow", 
     "dotenv", 
@@ -60,7 +60,7 @@ tokio = { version = "1.9.0", features = ["full"], optional = true }
 tracing = "0.1.26"
 tracing-error = "0.2.0"
 tracing-futures = "0.2.5"
-tracing-subscriber = { version = "0.3.9", optional = true }
+tracing-subscriber = { version = "0.3.5", optional = true, features = ["env-filter", "time"] }
 transform-stream = "0.2.0"
 uuid = { version = "0.8.2", features = ["v4"] }
 xml-rs = "0.8.3"

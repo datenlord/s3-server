@@ -131,6 +131,7 @@ fn uri_encode(output: &mut String, input: &str, encode_slash: bool) {
                 }
             }
             _ => {
+                /// helper macro for converting hex digits
                 macro_rules! to_hex {
                     ($n:expr) => {{
                         #[allow(clippy::indexing_slicing)]

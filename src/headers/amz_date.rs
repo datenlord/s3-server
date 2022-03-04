@@ -50,8 +50,8 @@ impl AmzDate {
                     take(2_usize),
                     tag("Z"),
                 ))),
-                |&s: &(&str, &str, &str, &str, &str, &str, &str, &str)| {
-                    [s.0, s.1, s.2, s.4, s.5, s.6]
+                |&ss: &(&str, &str, &str, &str, &str, &str, &str, &str)| {
+                    [ss.0, ss.1, ss.2, ss.4, ss.5, ss.6]
                         .iter()
                         .copied()
                         .all(|s: &str| s.as_bytes().iter().all(u8::is_ascii_digit))
