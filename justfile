@@ -4,6 +4,7 @@ set dotenv-load := true
 
 fmt:
     cargo fmt --all
+    cargo sort
 
 check:
     cargo check

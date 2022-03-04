@@ -2,13 +2,13 @@
 
 use crate::utils::Also;
 
-use hmac::{Hmac, Mac, NewMac};
+use hmac::{Hmac, Mac};
 use hyper::body::Bytes;
 use sha2::{Digest, Sha256};
 
 /// convert bytes to hex string
 pub fn to_hex_string(src: impl AsRef<[u8]>) -> String {
-    faster_hex::hex_string(src.as_ref())
+    hex_simd::encode_to_boxed_str(src.as_ref(), hex_simd::AsciiCase::Lower).into()
 }
 
 /// verify sha256 checksum string

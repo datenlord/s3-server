@@ -10,6 +10,7 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
+use futures::future::BoxFuture;
 use futures::pin_mut;
 use futures::stream::{Stream, StreamExt};
 use hyper::body::{Buf, Bytes};
@@ -19,7 +20,11 @@ use transform_stream::AsyncTryStream;
 /// Aws chunked stream
 pub struct AwsChunkedStream {
     /// inner
-    inner: AsyncTryStream<Bytes, AwsChunkedStreamError>,
+    inner: AsyncTryStream<
+        Bytes,
+        AwsChunkedStreamError,
+        BoxFuture<'static, Result<(), AwsChunkedStreamError>>,
+    >,
 }
 
 impl Debug for AwsChunkedStream {
@@ -130,55 +135,62 @@ impl AwsChunkedStream {
     where
         S: Stream<Item = io::Result<Bytes>> + Send + 'static,
     {
-        <AsyncTryStream<Bytes, AwsChunkedStreamError>>::new_boxed(|mut y| async move {
-            pin_mut!(body);
-            let mut prev_bytes = Bytes::new();
-            let mut buf: Vec<u8> = Vec::new();
-            let mut ctx = SignatureCtx {
-                amz_date,
-                region,
-                secret_key,
-                prev_signature: seed_signature,
-            };
+        let inner =
+            AsyncTryStream::<_, _, BoxFuture<'static, Result<(), AwsChunkedStreamError>>>::new(
+                |mut y| {
+                    Box::pin(async move {
+                        pin_mut!(body);
+                        let mut prev_bytes = Bytes::new();
+                        let mut buf: Vec<u8> = Vec::new();
+                        let mut ctx = SignatureCtx {
+                            amz_date,
+                            region,
+                            secret_key,
+                            prev_signature: seed_signature,
+                        };
 
-            loop {
-                let meta = {
-                    match Self::read_meta_bytes(body.as_mut(), prev_bytes, &mut buf).await {
-                        None => break,
-                        Some(Err(e)) => return Err(AwsChunkedStreamError::Io(e)),
-                        Some(Ok(remaining_bytes)) => prev_bytes = remaining_bytes,
-                    };
-                    if let Ok((_, meta)) = parse_chunk_meta(&buf) {
-                        meta
-                    } else {
-                        return Err(AwsChunkedStreamError::FormatError);
-                    }
-                };
+                        loop {
+                            let meta = {
+                                match Self::read_meta_bytes(body.as_mut(), prev_bytes, &mut buf)
+                                    .await
+                                {
+                                    None => break,
+                                    Some(Err(e)) => return Err(AwsChunkedStreamError::Io(e)),
+                                    Some(Ok(remaining_bytes)) => prev_bytes = remaining_bytes,
+                                };
+                                if let Ok((_, meta)) = parse_chunk_meta(&buf) {
+                                    meta
+                                } else {
+                                    return Err(AwsChunkedStreamError::FormatError);
+                                }
+                            };
 
-                let data: Vec<Bytes> = {
-                    match Self::read_data(body.as_mut(), prev_bytes, meta.size).await {
-                        None => return Err(AwsChunkedStreamError::Incomplete),
-                        Some(Err(e)) => return Err(e),
-                        Some(Ok((data, remaining_bytes))) => {
-                            prev_bytes = remaining_bytes;
-                            data
+                            let data: Vec<Bytes> = {
+                                match Self::read_data(body.as_mut(), prev_bytes, meta.size).await {
+                                    None => return Err(AwsChunkedStreamError::Incomplete),
+                                    Some(Err(e)) => return Err(e),
+                                    Some(Ok((data, remaining_bytes))) => {
+                                        prev_bytes = remaining_bytes;
+                                        data
+                                    }
+                                }
+                            };
+
+                            match check_signature(&ctx, meta.signature, &data) {
+                                None => return Err(AwsChunkedStreamError::SignatureMismatch),
+                                Some(signature) => ctx.prev_signature = signature,
+                            }
+
+                            for bytes in data {
+                                y.yield_ok(bytes).await;
+                            }
                         }
-                    }
-                };
 
-                match check_signature(&ctx, meta.signature, &data) {
-                    None => return Err(AwsChunkedStreamError::SignatureMismatch),
-                    Some(signature) => ctx.prev_signature = signature,
-                }
-
-                for bytes in data {
-                    y.yield_ok(bytes).await;
-                }
-            }
-
-            Ok(())
-        })
-        .apply(|inner| Self { inner })
+                        Ok(())
+                    })
+                },
+            );
+        Self { inner }
     }
 
     /// read meta bytes and return remaining bytes
