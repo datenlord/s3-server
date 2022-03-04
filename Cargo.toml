@@ -2,13 +2,14 @@
 name = "s3-server"
 version = "0.1.0"
 authors = ["Nugine <nugine@foxmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 repository = "https://github.com/datenlord/s3-server"
 readme = "README.md"
 description = "An experimental generic S3 server"
 keywords = ["s3"]
 categories = ["web-programming", "web-programming::http-server"]
+rust-version = "1.59"
 
 [features]
 default = ["binary"]
