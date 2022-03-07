@@ -37,7 +37,10 @@ impl S3Handler for Handler {
             ctx.multipart.is_some()
         } else if ctx.req.method() == Method::PUT {
             bool_try!(ctx.path.is_object());
-            ctx.query_strings.is_none()
+            match ctx.query_strings {
+                None => true,
+                Some(ref qs) => qs.get("uploadId").is_none(),
+            }
         } else {
             false
         }
