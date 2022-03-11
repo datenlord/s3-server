@@ -23,7 +23,7 @@ An experimental generic S3 server
 From cargo:
 
 ```
-cargo install s3-server
+cargo install s3-server --features binary
 ```
 
 From source:
@@ -38,7 +38,7 @@ s3-server --help
 ## Usage
 
 ```
-s3-server 0.1.0
+s3-server 0.2.0
 
 USAGE:
     s3-server [OPTIONS]
