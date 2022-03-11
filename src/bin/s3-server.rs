@@ -1,5 +1,5 @@
 //! ```shell
-//! s3-server 0.1.0-dev
+//! s3-server 0.2.0-dev
 //!
 //! USAGE:
 //!     s3-server [OPTIONS]
