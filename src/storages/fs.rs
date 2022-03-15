@@ -18,7 +18,7 @@ use crate::dto::{
     UploadPartRequest,
 };
 use crate::errors::{S3StorageError, S3StorageResult};
-use crate::headers::AmzCopySource;
+use crate::headers::{AmzCopySource, Range};
 use crate::path::S3Path;
 use crate::storage::S3Storage;
 use crate::utils::{crypto, time, Apply};
@@ -26,10 +26,10 @@ use crate::utils::{crypto, time, Apply};
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
 use std::env;
-use std::io;
+use std::io::{self, SeekFrom};
 use std::path::{Path, PathBuf};
 
-use futures::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt, BufWriter};
+use futures::io::{AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt, BufWriter};
 use futures::stream::{Stream, StreamExt, TryStreamExt};
 use hyper::body::Bytes;
 use md5::{Digest, Md5};
@@ -336,7 +336,12 @@ impl S3Storage for FileSystem {
     ) -> S3StorageResult<GetObjectOutput, GetObjectError> {
         let object_path = trace_try!(self.get_object_path(&input.bucket, &input.key));
 
-        let file = match File::open(&object_path).await {
+        let parse_range = |s: &str| {
+            Range::from_header_str(s).map_err(|err| invalid_request!("Invalid header: range", err))
+        };
+        let range: Option<Range> = input.range.as_deref().map(parse_range).transpose()?;
+
+        let mut file = match File::open(&object_path).await {
             Ok(file) => file,
             Err(e) => {
                 error!(error = %e, "GetObject: open file");
@@ -347,8 +352,40 @@ impl S3Storage for FileSystem {
 
         let file_metadata = trace_try!(file.metadata().await);
         let last_modified = time::to_rfc3339(trace_try!(file_metadata.modified()));
-        let content_length = file_metadata.len();
-        let stream = BytesStream::new(file, 4096, None);
+
+        let content_length = {
+            let file_len = file_metadata.len();
+            let content_len = match range {
+                None => file_len,
+                Some(Range::Normal { first, last }) => {
+                    if first > file_len {
+                        let err =
+                            code_error!(InvalidRange, "The requested range cannot be satisfied.");
+                        return Err(err.into());
+                    }
+                    let _ = trace_try!(file.seek(SeekFrom::Start(first)).await);
+                    last.unwrap_or(file_len).wrapping_sub(first)
+                }
+                Some(Range::Suffix { last }) => {
+                    let offset = Some(last)
+                        .filter(|&x| x <= file_len)
+                        .and_then(|x| i64::try_from(x).ok())
+                        .and_then(i64::checked_neg);
+
+                    if let Some(x) = offset {
+                        let _ = trace_try!(file.seek(SeekFrom::End(x)).await);
+                    } else {
+                        let err =
+                            code_error!(InvalidRange, "The requested range cannot be satisfied.");
+                        return Err(err.into());
+                    }
+                    last
+                }
+            };
+            trace_try!(usize::try_from(content_len))
+        };
+
+        let stream = BytesStream::new(file, 4096, Some(content_length));
 
         let object_metadata = trace_try!(self.load_metadata(&input.bucket, &input.key).await);
 
