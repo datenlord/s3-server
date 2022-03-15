@@ -348,7 +348,7 @@ impl S3Storage for FileSystem {
         let file_metadata = trace_try!(file.metadata().await);
         let last_modified = time::to_rfc3339(trace_try!(file_metadata.modified()));
         let content_length = file_metadata.len();
-        let stream = BytesStream::new(file, 4096);
+        let stream = BytesStream::new(file, 4096, None);
 
         let object_metadata = trace_try!(self.load_metadata(&input.bucket, &input.key).await);
 
