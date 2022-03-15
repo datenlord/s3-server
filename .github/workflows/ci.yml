@@ -115,7 +115,10 @@ jobs:
           touch remove-packages.list
 
           sed -i 's/mc.${MC_VERSION}/archive\/mc.${MC_VERSION}/' build/mc/install.sh
-          
+
+          # lock mc version
+          sed -i 's/^MC_VERSION.*/MC_VERSION=RELEASE.2022-03-09T02-08-36Z/g' build/mc/install.sh
+
           # delete tests for minio
           cat >> build/mc/install.sh << EOF
           sed -i '/^\s*test_rb\s*$/d' "\$test_run_dir/functional-tests.sh"
