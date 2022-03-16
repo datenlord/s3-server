@@ -358,13 +358,20 @@ impl S3Storage for FileSystem {
             let content_len = match range {
                 None => file_len,
                 Some(Range::Normal { first, last }) => {
-                    if first > file_len {
+                    if first >= file_len {
                         let err =
                             code_error!(InvalidRange, "The requested range cannot be satisfied.");
                         return Err(err.into());
                     }
                     let _ = trace_try!(file.seek(SeekFrom::Start(first)).await);
-                    last.unwrap_or(file_len).wrapping_sub(first)
+
+                    // HTTP byte range is inclusive
+                    //      len = last + 1 - first
+                    // or   len = file_len - first
+
+                    last.and_then(|x| x.checked_add(1))
+                        .unwrap_or(file_len)
+                        .wrapping_sub(first)
                 }
                 Some(Range::Suffix { last }) => {
                     let offset = Some(last)
