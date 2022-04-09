@@ -63,6 +63,7 @@ tracing-error = "0.2.0"
 tracing-futures = "0.2.5"
 tracing-subscriber = { version = "0.3.5", optional = true, features = ["env-filter", "time"] }
 transform-stream = "0.2.0"
+urlencoding = "2.1.0"
 uuid = { version = "0.8.2", features = ["v4"] }
 xml-rs = "0.8.3"
 
