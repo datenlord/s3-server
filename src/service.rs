@@ -15,6 +15,7 @@ use crate::streams::multipart::{self, Multipart};
 use crate::utils::{crypto, Apply};
 use crate::{Body, BoxStdError, Method, Mime, Request, Response};
 
+use std::borrow::Cow;
 use std::fmt::{self, Debug};
 use std::io;
 use std::mem;
@@ -143,7 +144,8 @@ impl S3Service {
     /// Returns an `Err` if any component failed
     pub async fn handle(&self, mut req: Request) -> S3Result<Response> {
         let body = mem::take(req.body_mut());
-        let path = extract_s3_path(&req)?;
+        let uri_path = decode_uri_path(&req)?;
+        let path = extract_s3_path(&uri_path)?;
         let headers = extract_headers(&req)?;
         let query_strings = extract_qs(&req)?;
         let mime = extract_mime(&headers)?;
@@ -177,9 +179,15 @@ impl S3Service {
     }
 }
 
+/// Extract urlencoded URI from Request
+fn decode_uri_path(req: &Request) -> S3Result<Cow<'_, str>> {
+    urlencoding::decode(req.uri().path())
+        .map_err(|e| code_error!(InvalidURI, "Cannot url decode uri path", e))
+}
+
 /// util function
-fn extract_s3_path(req: &Request) -> S3Result<S3Path<'_>> {
-    let result = S3Path::try_from_path(req.uri().path());
+fn extract_s3_path(uri_path: &str) -> S3Result<S3Path<'_>> {
+    let result = S3Path::try_from_path(uri_path);
     let err = try_err!(result);
     let (code, msg) = match *err.kind() {
         S3PathErrorKind::InvalidPath => {
