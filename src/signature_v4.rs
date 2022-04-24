@@ -167,6 +167,8 @@ const EMPTY_STRING_SHA256_HASH: &str =
 
 /// Payload
 pub enum Payload<'a> {
+    /// unsigned
+    Unsigned,
     /// empty
     Empty,
     /// single chunk
@@ -261,6 +263,7 @@ pub fn create_canonical_request(
         .also(|ans| {
             // <HashedPayload>
             match payload {
+                Payload::Unsigned => ans.push_str("UNSIGNED-PAYLOAD"),
                 Payload::Empty => ans.push_str(EMPTY_STRING_SHA256_HASH),
                 Payload::SingleChunk(data) => ans.push_str(&crypto::hex_sha256(data)),
                 Payload::MultipleChunks => ans.push_str("STREAMING-AWS4-HMAC-SHA256-PAYLOAD"),

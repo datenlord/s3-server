@@ -450,39 +450,31 @@ async fn check_header_auth(
     ctx: &mut ReqContext<'_>,
     auth: Option<&(dyn S3Auth + Send + Sync)>,
 ) -> S3Result<()> {
-    let amz_content_sha256 = match extract_amz_content_sha256(&ctx.headers)? {
-        Some(h) => h,
-        None => return Ok(()),
-    };
-
-    // --- header auth ---
-    let is_stream = match amz_content_sha256 {
-        AmzContentSha256::UnsignedPayload => return Ok(()),
-        AmzContentSha256::SingleChunk { .. } => false,
-        AmzContentSha256::MultipleChunks => true,
-    };
-
-    let auth_provider = match auth {
-        Some(a) => a,
-        None => {
-            return Err(not_supported!(
-                "The service has no authentication provider."
-            ))
+    let authorization: AuthorizationV4<'_> = {
+        if let Some(mut a) = extract_authorization_v4(&ctx.headers)? {
+            a.signed_headers.sort_unstable();
+            a
+        } else {
+            if auth.is_some() {
+                return Err(code_error!(AccessDenied, "Access Denied"));
+            }
+            return Ok(());
         }
     };
 
-    let authorization: AuthorizationV4<'_> = {
-        let a = extract_authorization_v4(&ctx.headers)?;
-        let mut a = a.ok_or_else(|| invalid_request!("Missing header: Authorization"))?;
-        a.signed_headers.sort_unstable();
-        a
-    };
+    let auth_provider =
+        auth.ok_or_else(|| not_supported!("The service has no authentication provider."))?;
+
+    let amz_content_sha256 = extract_amz_content_sha256(&ctx.headers)?
+        .ok_or_else(|| invalid_request!("Missing header: x-amz-content-sha256"))?;
 
     let secret_key =
         fetch_secret_key(auth_provider, authorization.credential.access_key_id).await?;
 
     let amz_date = extract_amz_date(&ctx.headers)?
         .ok_or_else(|| invalid_request!("Missing header: x-amz-date"))?;
+
+    let is_stream = matches!(amz_content_sha256, AmzContentSha256::MultipleChunks);
 
     let signature = {
         let method = ctx.req.method();
@@ -509,11 +501,14 @@ async fn check_header_auth(
                 .await
                 .map_err(|err| invalid_request!("Can not obtain the whole request body.", err))?;
 
-            let payload = if bytes.is_empty() {
+            let payload = if matches!(amz_content_sha256, AmzContentSha256::UnsignedPayload) {
+                signature_v4::Payload::Unsigned
+            } else if bytes.is_empty() {
                 signature_v4::Payload::Empty
             } else {
                 signature_v4::Payload::SingleChunk(&bytes)
             };
+
             let ans = signature_v4::create_canonical_request(
                 method,
                 uri_path,
