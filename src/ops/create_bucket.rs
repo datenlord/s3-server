@@ -53,14 +53,14 @@ async fn extract(ctx: &mut ReqContext<'_>) -> S3Result<CreateBucketRequest> {
     };
 
     let h = &ctx.headers;
-    h.assign_str(&*X_AMZ_ACL, &mut input.acl);
-    h.assign_str(&*X_AMZ_GRANT_FULL_CONTROL, &mut input.grant_full_control);
-    h.assign_str(&*X_AMZ_GRANT_READ, &mut input.grant_read);
-    h.assign_str(&*X_AMZ_GRANT_READ_ACP, &mut input.grant_read_acp);
-    h.assign_str(&*X_AMZ_GRANT_WRITE, &mut input.grant_write);
-    h.assign_str(&*X_AMZ_GRANT_WRITE_ACP, &mut input.grant_write_acp);
+    h.assign_str(X_AMZ_ACL, &mut input.acl);
+    h.assign_str(X_AMZ_GRANT_FULL_CONTROL, &mut input.grant_full_control);
+    h.assign_str(X_AMZ_GRANT_READ, &mut input.grant_read);
+    h.assign_str(X_AMZ_GRANT_READ_ACP, &mut input.grant_read_acp);
+    h.assign_str(X_AMZ_GRANT_WRITE, &mut input.grant_write);
+    h.assign_str(X_AMZ_GRANT_WRITE_ACP, &mut input.grant_write_acp);
     h.assign(
-        &*X_AMZ_BUCKET_OBJECT_LOCK_ENABLED,
+        X_AMZ_BUCKET_OBJECT_LOCK_ENABLED,
         &mut input.object_lock_enabled_for_bucket,
     )
     .map_err(|err| invalid_request!("Invalid header: x-amz-bucket-object-lock-enabled", err))?;

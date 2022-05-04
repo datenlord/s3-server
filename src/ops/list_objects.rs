@@ -54,7 +54,7 @@ fn extract(ctx: &mut ReqContext<'_>) -> S3Result<ListObjectsRequest> {
     }
 
     ctx.headers
-        .assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
+        .assign_str(X_AMZ_REQUEST_PAYER, &mut input.request_payer);
 
     Ok(input)
 }

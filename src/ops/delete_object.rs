@@ -47,13 +47,13 @@ fn extract(ctx: &mut ReqContext<'_>) -> S3Result<DeleteObjectRequest> {
     let h = &ctx.headers;
 
     h.assign(
-        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION,
+        X_AMZ_BYPASS_GOVERNANCE_RETENTION,
         &mut input.bypass_governance_retention,
     )
     .map_err(|err| invalid_request!("Invalid header: x-amz-bypass-governance-retention", err))?;
 
-    h.assign_str(&*X_AMZ_MFA, &mut input.mfa);
-    h.assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
+    h.assign_str(X_AMZ_MFA, &mut input.mfa);
+    h.assign_str(X_AMZ_REQUEST_PAYER, &mut input.request_payer);
 
     if let Some(ref qs) = ctx.query_strings {
         input.version_id = qs.get("versionId").map(ToOwned::to_owned);
@@ -67,11 +67,11 @@ impl S3Output for DeleteObjectOutput {
         wrap_internal_error(|res| {
             res.set_status(StatusCode::NO_CONTENT);
             res.set_optional_header(
-                &*X_AMZ_DELETE_MARKER,
+                X_AMZ_DELETE_MARKER,
                 self.delete_marker.map(|b| b.to_string()),
             )?;
-            res.set_optional_header(&*X_AMZ_VERSION_ID, self.version_id)?;
-            res.set_optional_header(&*X_AMZ_REQUEST_CHARGED, self.request_charged)?;
+            res.set_optional_header(X_AMZ_VERSION_ID, self.version_id)?;
+            res.set_optional_header(X_AMZ_REQUEST_CHARGED, self.request_charged)?;
             Ok(())
         })
     }

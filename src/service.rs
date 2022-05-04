@@ -226,7 +226,7 @@ fn extract_mime(headers: &OrderedHeaders<'_>) -> S3Result<Option<Mime>> {
 fn extract_amz_content_sha256<'a>(
     headers: &'_ OrderedHeaders<'a>,
 ) -> S3Result<Option<AmzContentSha256<'a>>> {
-    let value = try_some!(headers.get(&*X_AMZ_CONTENT_SHA256));
+    let value = try_some!(headers.get(X_AMZ_CONTENT_SHA256));
     let err = try_err!(AmzContentSha256::from_header_str(value).map(Some));
     Err(code_error!(
         XAmzContentSHA256Mismatch,
@@ -246,7 +246,7 @@ fn extract_authorization_v4<'a>(
 
 /// extract `AmzDate` from headers
 fn extract_amz_date(headers: &'_ OrderedHeaders<'_>) -> S3Result<Option<AmzDate>> {
-    let value = try_some!(headers.get(&*X_AMZ_DATE));
+    let value = try_some!(headers.get(X_AMZ_DATE));
     let err = try_err!(AmzDate::from_header_str(value).map(Some));
     Err(invalid_request!("Invalid header: x-amz-date", err))
 }

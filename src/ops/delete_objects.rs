@@ -52,10 +52,10 @@ pub async fn extract(ctx: &mut ReqContext<'_>) -> S3Result<DeleteObjectsRequest>
     };
 
     let h = &ctx.headers;
-    h.assign_str(&*X_AMZ_MFA, &mut input.mfa);
-    h.assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
+    h.assign_str(X_AMZ_MFA, &mut input.mfa);
+    h.assign_str(X_AMZ_REQUEST_PAYER, &mut input.request_payer);
     h.assign(
-        &*X_AMZ_BYPASS_GOVERNANCE_RETENTION,
+        X_AMZ_BYPASS_GOVERNANCE_RETENTION,
         &mut input.bypass_governance_retention,
     )
     .map_err(|err| invalid_request!("Invalid header: x-amz-bypass-governance-retention", err))?;
@@ -67,7 +67,7 @@ impl S3Output for DeleteObjectsOutput {
     #[allow(clippy::shadow_unrelated)]
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
-            res.set_optional_header(&*X_AMZ_REQUEST_CHARGED, self.request_charged)?;
+            res.set_optional_header(X_AMZ_REQUEST_CHARGED, self.request_charged)?;
 
             let deleted = self.deleted;
             let errors = self.errors;

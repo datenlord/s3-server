@@ -58,18 +58,18 @@ fn extract(ctx: &mut ReqContext<'_>) -> S3Result<GetObjectRequest> {
     h.assign_str(IF_UNMODIFIED_SINCE, &mut input.if_unmodified_since);
     h.assign_str(RANGE, &mut input.range);
     h.assign_str(
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
         &mut input.sse_customer_algorithm,
     );
     h.assign_str(
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
         &mut input.sse_customer_key,
     );
     h.assign_str(
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
         &mut input.sse_customer_key_md5,
     );
-    h.assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
+    h.assign_str(X_AMZ_REQUEST_PAYER, &mut input.request_payer);
 
     Ok(input)
 }
@@ -78,14 +78,14 @@ impl S3Output for GetObjectOutput {
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
             res.set_optional_header(
-                &*X_AMZ_DELETE_MARKER,
+                X_AMZ_DELETE_MARKER,
                 self.delete_marker.map(|b| b.to_string()),
             )?;
 
             res.set_optional_header(ACCEPT_RANGES, self.accept_ranges)?;
 
-            res.set_optional_header(&*X_AMZ_EXPIRATION, self.expiration)?;
-            res.set_optional_header(&*X_AMZ_RESTORE, self.restore)?;
+            res.set_optional_header(X_AMZ_EXPIRATION, self.expiration)?;
+            res.set_optional_header(X_AMZ_RESTORE, self.restore)?;
 
             res.set_optional_header(
                 LAST_MODIFIED,
@@ -96,12 +96,9 @@ impl S3Output for GetObjectOutput {
 
             res.set_optional_header(ETAG, self.e_tag)?;
 
-            res.set_optional_header(
-                &*X_AMZ_MISSING_META,
-                self.missing_meta.map(|m| m.to_string()),
-            )?;
+            res.set_optional_header(X_AMZ_MISSING_META, self.missing_meta.map(|m| m.to_string()))?;
 
-            res.set_optional_header(&*X_AMZ_VERSION_ID, self.version_id)?;
+            res.set_optional_header(X_AMZ_VERSION_ID, self.version_id)?;
             res.set_optional_header(CACHE_CONTROL, self.cache_control)?;
 
             res.set_optional_header(CONTENT_DISPOSITION, self.content_disposition)?;
@@ -113,39 +110,39 @@ impl S3Output for GetObjectOutput {
             res.set_optional_header(EXPIRES, self.expires)?;
 
             res.set_optional_header(
-                &*X_AMZ_WEBSITE_REDIRECT_LOCATION,
+                X_AMZ_WEBSITE_REDIRECT_LOCATION,
                 self.website_redirect_location,
             )?;
 
-            res.set_optional_header(&*X_AMZ_SERVER_SIDE_ENCRYPTION, self.server_side_encryption)?;
+            res.set_optional_header(X_AMZ_SERVER_SIDE_ENCRYPTION, self.server_side_encryption)?;
             res.set_optional_header(
-                &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
+                X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
                 self.sse_customer_algorithm,
             )?;
             res.set_optional_header(
-                &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
+                X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
                 self.sse_customer_key_md5,
             )?;
             res.set_optional_header(
-                &*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
+                X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
                 self.ssekms_key_id,
             )?;
 
-            res.set_optional_header(&*X_AMZ_STORAGE_CLASS, self.storage_class)?;
-            res.set_optional_header(&*X_AMZ_REQUEST_CHARGED, self.request_charged)?;
-            res.set_optional_header(&*X_AMZ_REPLICATION_STATUS, self.replication_status)?;
+            res.set_optional_header(X_AMZ_STORAGE_CLASS, self.storage_class)?;
+            res.set_optional_header(X_AMZ_REQUEST_CHARGED, self.request_charged)?;
+            res.set_optional_header(X_AMZ_REPLICATION_STATUS, self.replication_status)?;
             res.set_optional_header(
-                &*X_AMZ_MP_PARTS_COUNT,
+                X_AMZ_MP_PARTS_COUNT,
                 self.parts_count.map(|c| c.to_string()),
             )?;
-            res.set_optional_header(&*X_AMZ_TAGGING_COUNT, self.tag_count.map(|c| c.to_string()))?;
-            res.set_optional_header(&*X_AMZ_OBJECT_LOCK_MODE, self.object_lock_mode)?;
+            res.set_optional_header(X_AMZ_TAGGING_COUNT, self.tag_count.map(|c| c.to_string()))?;
+            res.set_optional_header(X_AMZ_OBJECT_LOCK_MODE, self.object_lock_mode)?;
             res.set_optional_header(
-                &*X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,
+                X_AMZ_OBJECT_LOCK_RETAIN_UNTIL_DATE,
                 self.object_lock_retain_until_date,
             )?;
             res.set_optional_header(
-                &*X_AMZ_OBJECT_LOCK_LEGAL_HOLD,
+                X_AMZ_OBJECT_LOCK_LEGAL_HOLD,
                 self.object_lock_legal_hold_status,
             )?;
 
