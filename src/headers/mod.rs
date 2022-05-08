@@ -19,6 +19,7 @@ macro_rules! declare_header_name{
     {$($(#[$docs:meta])* $n:ident: $s:expr;)+} => {
         $(
             $(#[$docs])*
+            #[allow(clippy::declare_interior_mutable_const)] // See https://github.com/rust-lang/rust-clippy/issues/5812
             pub const $n: HeaderName = HeaderName::from_static($s);
         )+
 
