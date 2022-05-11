@@ -1,4 +1,5 @@
 //! Common Request Headers
+#![allow(clippy::borrow_interior_mutable_const)] // See https://github.com/rust-lang/rust-clippy/issues/5812
 
 mod amz_content_sha256;
 mod amz_copy_source;

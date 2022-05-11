@@ -104,7 +104,7 @@ mod success {
             .parse()
             .unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -132,7 +132,7 @@ mod success {
             .parse()
             .unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -166,7 +166,7 @@ mod success {
             .parse()
             .unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -193,7 +193,7 @@ mod success {
         *req.method_mut() = Method::PUT;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -220,7 +220,7 @@ mod success {
         *req.method_mut() = Method::DELETE;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -247,7 +247,7 @@ mod success {
         *req.method_mut() = Method::HEAD;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -274,7 +274,7 @@ mod success {
         *req.method_mut() = Method::GET;
         *req.uri_mut() = "http://localhost/".parse().unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -327,7 +327,7 @@ mod error {
             .parse()
             .unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -359,7 +359,7 @@ mod error {
         *req.method_mut() = Method::HEAD;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
@@ -395,7 +395,7 @@ mod error {
         *req.method_mut() = Method::PUT;
         *req.uri_mut() = format!("http://localhost/{}", bucket).parse().unwrap();
         req.headers_mut().insert(
-            X_AMZ_CONTENT_SHA256.clone(),
+            X_AMZ_CONTENT_SHA256,
             HeaderValue::from_static("UNSIGNED-PAYLOAD"),
         );
 
