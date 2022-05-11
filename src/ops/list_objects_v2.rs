@@ -62,7 +62,7 @@ fn extract(
     }
 
     ctx.headers
-        .assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
+        .assign_str(X_AMZ_REQUEST_PAYER, &mut input.request_payer);
 
     Ok(input)
 }

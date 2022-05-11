@@ -61,7 +61,7 @@ async fn extract(ctx: &mut ReqContext<'_>) -> S3Result<CompleteMultipartUploadRe
     };
 
     let h = &ctx.headers;
-    h.assign_str(&*X_AMZ_REQUEST_PAYER, &mut input.request_payer);
+    h.assign_str(X_AMZ_REQUEST_PAYER, &mut input.request_payer);
 
     Ok(input)
 }
@@ -76,14 +76,14 @@ impl S3Output for CompleteMultipartUploadOutput {
     #[allow(clippy::shadow_unrelated)]
     fn try_into_response(self) -> S3Result<Response> {
         wrap_internal_error(|res| {
-            res.set_optional_header(&*X_AMZ_EXPIRATION, self.expiration)?;
-            res.set_optional_header(&*X_AMZ_SERVER_SIDE_ENCRYPTION, self.server_side_encryption)?;
-            res.set_optional_header(&*X_AMZ_VERSION_ID, self.version_id)?;
+            res.set_optional_header(X_AMZ_EXPIRATION, self.expiration)?;
+            res.set_optional_header(X_AMZ_SERVER_SIDE_ENCRYPTION, self.server_side_encryption)?;
+            res.set_optional_header(X_AMZ_VERSION_ID, self.version_id)?;
             res.set_optional_header(
-                &*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
+                X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
                 self.ssekms_key_id,
             )?;
-            res.set_optional_header(&*X_AMZ_REQUEST_CHARGED, self.request_charged)?;
+            res.set_optional_header(X_AMZ_REQUEST_CHARGED, self.request_charged)?;
 
             let location = self.location;
             let bucket = self.bucket;

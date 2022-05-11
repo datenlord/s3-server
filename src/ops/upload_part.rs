@@ -70,17 +70,17 @@ fn extract(
     let h = &ctx.headers;
     h.assign(CONTENT_LENGTH, &mut input.content_length)
         .map_err(|err| invalid_request!("Invalid header: content-length", err))?;
-    h.assign_str(&*CONTENT_MD5, &mut input.content_md5);
+    h.assign_str(CONTENT_MD5, &mut input.content_md5);
     h.assign_str(
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
         &mut input.sse_customer_algorithm,
     );
     h.assign_str(
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY,
         &mut input.sse_customer_key,
     );
     h.assign_str(
-        &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
+        X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
         &mut input.sse_customer_key_md5,
     );
 
@@ -92,21 +92,21 @@ impl S3Output for UploadPartOutput {
         wrap_internal_error(|res| {
             res.set_optional_header(ETAG, self.e_tag)?;
 
-            res.set_optional_header(&*X_AMZ_SERVER_SIDE_ENCRYPTION, self.server_side_encryption)?;
+            res.set_optional_header(X_AMZ_SERVER_SIDE_ENCRYPTION, self.server_side_encryption)?;
             res.set_optional_header(
-                &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
+                X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_ALGORITHM,
                 self.sse_customer_algorithm,
             )?;
             res.set_optional_header(
-                &*X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
+                X_AMZ_SERVER_SIDE_ENCRYPTION_CUSTOMER_KEY_MD5,
                 self.sse_customer_key_md5,
             )?;
             res.set_optional_header(
-                &*X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
+                X_AMZ_SERVER_SIDE_ENCRYPTION_AWS_KMS_KEY_ID,
                 self.ssekms_key_id,
             )?;
 
-            res.set_optional_header(&*X_AMZ_REQUEST_CHARGED, self.request_charged)?;
+            res.set_optional_header(X_AMZ_REQUEST_CHARGED, self.request_charged)?;
 
             Ok(())
         })

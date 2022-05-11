@@ -1,4 +1,5 @@
 //! Common Request Headers
+#![allow(clippy::borrow_interior_mutable_const)] // See https://github.com/rust-lang/rust-clippy/issues/5812
 
 mod amz_content_sha256;
 mod amz_copy_source;
@@ -14,16 +15,13 @@ pub use self::range::Range;
 
 pub use hyper::header::*;
 
-// FIXME: declare const headers, see <https://github.com/hyperium/http/issues/264>
-
-use once_cell::sync::Lazy;
-
 /// declare http header names
 macro_rules! declare_header_name{
     {$($(#[$docs:meta])* $n:ident: $s:expr;)+} => {
         $(
             $(#[$docs])*
-            pub static $n: Lazy<HeaderName> = Lazy::new(||HeaderName::from_static($s));
+            #[allow(clippy::declare_interior_mutable_const)] // See https://github.com/rust-lang/rust-clippy/issues/5812
+            pub const $n: HeaderName = HeaderName::from_static($s);
         )+
 
         #[test]

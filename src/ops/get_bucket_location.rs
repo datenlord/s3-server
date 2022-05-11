@@ -44,7 +44,7 @@ fn extract(ctx: &mut ReqContext<'_>) -> S3Result<GetBucketLocationRequest> {
 
     let h = &ctx.headers;
     h.assign_str(
-        &*X_AMZ_EXPECTED_BUCKET_OWNER,
+        X_AMZ_EXPECTED_BUCKET_OWNER,
         &mut input.expected_bucket_owner,
     );
 
