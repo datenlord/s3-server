@@ -11,7 +11,7 @@ on:
 name: CI
 
 env:
-  CI_RUST_TOOLCHAIN: 1.59
+  CI_RUST_TOOLCHAIN: 1.62
 
 jobs:
   check:
