@@ -30,7 +30,7 @@ anyhow = { version = "1.0.57", optional = true }
 async-fs = "1.5.0"
 async-trait = "0.1.53"
 backtrace = "0.3.65"
-base64 = "0.13.0"
+base64 = "0.20.0"
 chrono = "0.4.19"
 const-str = { version = "0.3.1", features = ["verify-regex"] }
 dotenv = { version = "0.15.0", optional = true }
