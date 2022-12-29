@@ -55,13 +55,14 @@ impl Display for S3Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "S3Error: code: {}", self.0.code)?;
         if let Some(ref msg) = self.0.message {
-            write!(f, ", message: {}", msg)?;
+            write!(f, ", message: {msg}")?;
         }
         if let Some(ref source) = self.0.source {
-            write!(f, "\nsource: {}", source)?;
+            write!(f, "\nsource: {source}")?;
         }
         if let Some(ref backtrace) = self.0.backtrace {
-            write!(f, "\nbacktrace:\n{:?}", backtrace)?;
+            #[allow(clippy::use_debug)]
+            write!(f, "\nbacktrace:\n{backtrace:?}")?;
         }
         Ok(())
     }
@@ -72,7 +73,7 @@ impl Error for S3Error {
         self.0
             .source
             .as_deref()
-            .map(|e| -> &(dyn Error + 'static) { &*e })
+            .map(|e| -> &(dyn Error + 'static) { e })
     }
 }
 

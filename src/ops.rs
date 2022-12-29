@@ -121,7 +121,7 @@ impl<'a> ReqContext<'a> {
     fn unwrap_qs(&self, name: &str) -> &str {
         match self.query_strings.as_ref().and_then(|qs| qs.get(name)) {
             Some(s) => s,
-            None => panic!("expected query string: name = {:?}", name),
+            None => panic!("expected query string: name = {name:?}"),
         }
     }
 
@@ -129,7 +129,7 @@ impl<'a> ReqContext<'a> {
     fn unwrap_header(&self, name: impl AsHeaderName + Debug) -> &str {
         let s = match self.headers.get(name.as_str()) {
             Some(s) => s,
-            None => panic!("expected header: name = {:?}", name),
+            None => panic!("expected header: name = {name:?}"),
         };
         drop(name);
         s

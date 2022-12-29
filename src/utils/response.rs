@@ -94,7 +94,7 @@ impl ResponseExt for Response {
     ) -> Result<(), BoxStdError> {
         let headers = self.headers_mut();
         for (name, value) in metadata {
-            let header_name = HeaderName::from_bytes(format!("x-amz-meta-{}", name).as_bytes())?;
+            let header_name = HeaderName::from_bytes(format!("x-amz-meta-{name}").as_bytes())?;
             let header_value = HeaderValue::from_bytes(value.as_bytes())?;
             let _prev = headers.insert(header_name, header_value);
         }

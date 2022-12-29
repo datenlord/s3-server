@@ -305,7 +305,7 @@ impl FileStream {
 
                             if crlf_pat.starts_with(remaining) {
                                 y.yield_ok(bytes.split_to(idx)).await;
-                                buf.extend_from_slice(&*bytes);
+                                buf.extend_from_slice(&bytes);
                                 bytes.clear();
                                 state = 3;
                                 continue 'dfa;
@@ -322,7 +322,7 @@ impl FileStream {
                         match body.as_mut().next().await {
                             None => return Err(FileStreamError::Incomplete),
                             Some(Err(e)) => return Err(FileStreamError::Io(e)),
-                            Some(Ok(b)) => buf.extend_from_slice(&*b),
+                            Some(Ok(b)) => buf.extend_from_slice(&b),
                         };
                         bytes = Bytes::from(mem::take(&mut buf));
                         state = 2;
@@ -553,7 +553,7 @@ mod tests {
         let file_content = "file_content";
 
         let body_bytes = {
-            let mut ss = vec![format!("\r\n--{}\r\n", boundary)];
+            let mut ss = vec![format!("\r\n--{boundary}\r\n")];
             for &(n, v) in &fields {
                 ss.push(format!(
                     concat!(
