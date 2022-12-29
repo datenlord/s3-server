@@ -505,6 +505,46 @@ impl Display for S3ErrorCode {
         <Self as fmt::Debug>::fmt(self, f)
     }
 }
+
+/// S3 error code parse error
+#[allow(clippy::exhaustive_enums)]
+#[derive(Debug)]
+pub enum ParseS3ErrorCodeError<'a> {
+    /// String error code parsing error
+    FromStr(&'a str),
+}
+
+/// Codegen for round trip between `S3ErrorCode` enum and string
+macro_rules! roundtrip_variant_and_str
+{
+    [$($v:tt,)+] => {
+
+        /// Returns a corresponding string of the error code
+        #[must_use]
+        pub const fn as_static_str(self) -> &'static str {
+            match self {
+                $(
+                    Self::$v => stringify!($v),
+                )+
+            }
+        }
+
+        /// Returns a corresponding error code from a string
+        /// # Errors
+        /// Returns an `Err` if parsing failed
+        pub fn parse_from_str<'a>(s: &'a str) -> Result<Self, ParseS3ErrorCodeError<'a>> {
+            Ok(match s {
+                $(
+                   stringify!($v) =>  Self::$v,
+                )+
+                _ => {
+                    return Err(ParseS3ErrorCodeError::FromStr(s));
+                }
+            })
+        }
+    }
+}
+
 impl S3ErrorCode {
     /// Returns a corresponding status code of the error code
     #[allow(clippy::match_same_arms)] // keep alphabet order for human readability
@@ -599,106 +639,91 @@ impl S3ErrorCode {
         }
     }
 
-    /// Returns a corresponding string of the error code
-    #[must_use]
-    pub const fn as_static_str(self) -> &'static str {
-        /// help macro for matching
-        macro_rules! map_variant_to_str{
-            [$($v:tt,)+]=>{
-                match self {
-                    $(
-                        Self::$v => stringify!($v),
-                    )+
-                }
-            }
-        }
-
-        map_variant_to_str![
-            AccessDenied,
-            AccountProblem,
-            AllAccessDisabled,
-            AmbiguousGrantByEmailAddress,
-            AuthorizationHeaderMalformed,
-            BadDigest,
-            BucketAlreadyExists,
-            BucketAlreadyOwnedByYou,
-            BucketNotEmpty,
-            CredentialsNotSupported,
-            CrossLocationLoggingProhibited,
-            EntityTooSmall,
-            EntityTooLarge,
-            ExpiredToken,
-            IllegalLocationConstraintException,
-            IllegalVersioningConfigurationException,
-            IncompleteBody,
-            IncorrectNumberOfFilesInPostRequest,
-            InlineDataTooLarge,
-            InternalError,
-            InvalidAccessKeyId,
-            InvalidAddressingHeader,
-            InvalidArgument,
-            InvalidBucketName,
-            InvalidBucketState,
-            InvalidDigest,
-            InvalidEncryptionAlgorithmError,
-            InvalidLocationConstraint,
-            InvalidObjectState,
-            InvalidPart,
-            InvalidPartOrder,
-            InvalidPayer,
-            InvalidPolicyDocument,
-            InvalidRange,
-            InvalidRequest,
-            InvalidSecurity,
-            InvalidSOAPRequest,
-            InvalidStorageClass,
-            InvalidTargetBucketForLogging,
-            InvalidToken,
-            InvalidURI,
-            KeyTooLongError,
-            MalformedACLError,
-            MalformedPOSTRequest,
-            MalformedXML,
-            MaxMessageLengthExceeded,
-            MaxPostPreDataLengthExceededError,
-            MetadataTooLarge,
-            MethodNotAllowed,
-            MissingAttachment,
-            MissingContentLength,
-            MissingRequestBodyError,
-            MissingSecurityElement,
-            MissingSecurityHeader,
-            NoLoggingStatusForKey,
-            NoSuchBucket,
-            NoSuchBucketPolicy,
-            NoSuchKey,
-            NoSuchLifecycleConfiguration,
-            NoSuchUpload,
-            NoSuchVersion,
-            NotImplemented,
-            NotSignedUp,
-            NotSupported,
-            ObjectNotInActiveTierError,
-            OperationAborted,
-            PermanentRedirect,
-            PreconditionFailed,
-            Redirect,
-            RestoreAlreadyInProgress,
-            RequestIsNotMultiPartContent,
-            RequestTimeout,
-            RequestTimeTooSkewed,
-            RequestTorrentOfBucketError,
-            ServerSideEncryptionConfigurationNotFoundError,
-            ServiceUnavailable,
-            SignatureDoesNotMatch,
-            SlowDown,
-            TemporaryRedirect,
-            TokenRefreshRequired,
-            TooManyBuckets,
-            UnexpectedContent,
-            UnresolvableGrantByEmailAddress,
-            UserKeyMustBeSpecified,
-            XAmzContentSHA256Mismatch,
-        ]
-    }
+    roundtrip_variant_and_str![
+        AccessDenied,
+        AccountProblem,
+        AllAccessDisabled,
+        AmbiguousGrantByEmailAddress,
+        AuthorizationHeaderMalformed,
+        BadDigest,
+        BucketAlreadyExists,
+        BucketAlreadyOwnedByYou,
+        BucketNotEmpty,
+        CredentialsNotSupported,
+        CrossLocationLoggingProhibited,
+        EntityTooSmall,
+        EntityTooLarge,
+        ExpiredToken,
+        IllegalLocationConstraintException,
+        IllegalVersioningConfigurationException,
+        IncompleteBody,
+        IncorrectNumberOfFilesInPostRequest,
+        InlineDataTooLarge,
+        InternalError,
+        InvalidAccessKeyId,
+        InvalidAddressingHeader,
+        InvalidArgument,
+        InvalidBucketName,
+        InvalidBucketState,
+        InvalidDigest,
+        InvalidEncryptionAlgorithmError,
+        InvalidLocationConstraint,
+        InvalidObjectState,
+        InvalidPart,
+        InvalidPartOrder,
+        InvalidPayer,
+        InvalidPolicyDocument,
+        InvalidRange,
+        InvalidRequest,
+        InvalidSecurity,
+        InvalidSOAPRequest,
+        InvalidStorageClass,
+        InvalidTargetBucketForLogging,
+        InvalidToken,
+        InvalidURI,
+        KeyTooLongError,
+        MalformedACLError,
+        MalformedPOSTRequest,
+        MalformedXML,
+        MaxMessageLengthExceeded,
+        MaxPostPreDataLengthExceededError,
+        MetadataTooLarge,
+        MethodNotAllowed,
+        MissingAttachment,
+        MissingContentLength,
+        MissingRequestBodyError,
+        MissingSecurityElement,
+        MissingSecurityHeader,
+        NoLoggingStatusForKey,
+        NoSuchBucket,
+        NoSuchBucketPolicy,
+        NoSuchKey,
+        NoSuchLifecycleConfiguration,
+        NoSuchUpload,
+        NoSuchVersion,
+        NotImplemented,
+        NotSignedUp,
+        NotSupported,
+        ObjectNotInActiveTierError,
+        OperationAborted,
+        PermanentRedirect,
+        PreconditionFailed,
+        Redirect,
+        RestoreAlreadyInProgress,
+        RequestIsNotMultiPartContent,
+        RequestTimeout,
+        RequestTimeTooSkewed,
+        RequestTorrentOfBucketError,
+        ServerSideEncryptionConfigurationNotFoundError,
+        ServiceUnavailable,
+        SignatureDoesNotMatch,
+        SlowDown,
+        TemporaryRedirect,
+        TokenRefreshRequired,
+        TooManyBuckets,
+        UnexpectedContent,
+        UnresolvableGrantByEmailAddress,
+        UserKeyMustBeSpecified,
+        XAmzContentSHA256Mismatch,
+    ];
 }
