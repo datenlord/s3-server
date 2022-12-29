@@ -74,8 +74,8 @@ impl<'a> AmzCopySource<'a> {
         match pattern.captures(header) {
             None => Err(ParseAmzCopySourceError::PatternMismatch),
             Some(captures) => {
-                let bucket = captures.get(1).unwrap().as_str();
-                let key = captures.get(2).unwrap().as_str();
+                let bucket = captures.get(1).expect("failed to capture bucket").as_str();
+                let key = captures.get(2).expect("failed to capture key").as_str();
 
                 if !S3Path::check_bucket_name(bucket) {
                     return Err(ParseAmzCopySourceError::InvalidBucketName);

@@ -105,6 +105,16 @@
     clippy::blanket_clippy_restriction_lints,
     clippy::separated_literal_suffix, // Conflicts with `clippy::unseparated_literal_suffix`
     clippy::shadow_reuse, // It is a common pattern
+    clippy::single_char_lifetime_names, // It is a common pattern
+    clippy::std_instead_of_core, // It is a common pattern
+    clippy::std_instead_of_alloc, // It is a common pattern
+    clippy::pub_use, // It is a common pattern
+    clippy::option_if_let_else, // It is a common pattern
+    clippy::expect_used, // It is a common pattern
+    clippy::unreachable, // It is a common pattern
+    clippy::assertions_on_result_states, // It is a common pattern in tests
+    clippy::self_named_module_files, // Prefer self named module files as the new standard
+    clippy::missing_trait_methods, // Recommended to disable globally
 )]
 #![cfg_attr(test, allow(
     clippy::unwrap_used, // Tests need [`unwrap`]

@@ -106,7 +106,7 @@ impl<'a> CredentialV4<'a> {
                     }};
                 }
                 matches!(
-                    Utc.ymd_opt(parse_num!(y), parse_num!(m), parse_num!(d)),
+                    Utc.with_ymd_and_hms(parse_num!(y), parse_num!(m), parse_num!(d), 0, 0, 0),
                     chrono::LocalResult::Single(_)
                 )
             },

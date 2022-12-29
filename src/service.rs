@@ -57,7 +57,7 @@ impl Debug for S3Service {
 impl Deref for SharedS3Service {
     type Target = S3Service;
     fn deref(&self) -> &Self::Target {
-        &*self.inner
+        &self.inner
     }
 }
 
@@ -255,10 +255,7 @@ fn extract_amz_date(headers: &'_ OrderedHeaders<'_>) -> S3Result<Option<AmzDate>
 fn take_io_body(body: &mut Body) -> impl Stream<Item = io::Result<Bytes>> + Send + 'static {
     mem::take(body).map(|try_chunk| {
         try_chunk.map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("Error obtaining chunk: {}", e),
-            )
+            io::Error::new(io::ErrorKind::Other, format!("Error obtaining chunk: {e}"))
         })
     })
 }
@@ -402,9 +399,8 @@ async fn check_presigned_url(
     let presigned_url = signature_v4::PresignedUrl::from_query(qs)
         .map_err(|err| invalid_request!("Missing presigned fields", err))?;
 
-    let content_sha256: Option<AmzContentSha256<'_>> = extract_amz_content_sha256(&ctx.headers)?;
-
-    drop(content_sha256); // how to use it?
+    // TODO: how to use it?
+    let _content_sha256: Option<AmzContentSha256<'_>> = extract_amz_content_sha256(&ctx.headers)?;
 
     let auth_provider = match auth {
         Some(a) => a,

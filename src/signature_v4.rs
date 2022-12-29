@@ -178,6 +178,7 @@ pub enum Payload<'a> {
 }
 
 /// create canonical request
+#[allow(clippy::needless_pass_by_value)]
 pub fn create_canonical_request(
     method: &Method,
     uri_path: &str,
@@ -268,7 +269,6 @@ pub fn create_canonical_request(
                 Payload::SingleChunk(data) => ans.push_str(&crypto::hex_sha256(data)),
                 Payload::MultipleChunks => ans.push_str("STREAMING-AWS4-HMAC-SHA256-PAYLOAD"),
             }
-            drop(payload);
         })
 }
 

@@ -61,7 +61,7 @@ impl<W: io::Write> XmlWriterExt for EventWriter<W> {
     fn opt_element(&mut self, name: &str, data: Option<impl Deref<Target = str>>) -> Result<()> {
         if let Some(data) = data {
             self.write(XmlEvent::start_element(name))?;
-            self.write(XmlEvent::characters(&*data))?;
+            self.write(XmlEvent::characters(&data))?;
             self.write(XmlEvent::end_element())?;
         }
         Ok(())

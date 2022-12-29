@@ -71,10 +71,9 @@ impl AmzDate {
 
         /// parse u32
         fn to_u32(input: &str) -> Result<u32, ParseAmzDateError> {
-            match input.parse::<u32>() {
-                Ok(x) => Ok(x),
-                Err(_) => Err(ParseAmzDateError { _priv: () }),
-            }
+            input
+                .parse::<u32>()
+                .map_err(|_err| ParseAmzDateError { _priv: () })
         }
 
         match parse(header) {
