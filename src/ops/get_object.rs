@@ -17,7 +17,7 @@ use crate::headers::{
 };
 use crate::output::S3Output;
 use crate::storage::S3Storage;
-use crate::utils::{time, ResponseExt};
+use crate::utils::ResponseExt;
 use crate::{async_trait, Body, Method, Response};
 
 /// `GetObject` handler
