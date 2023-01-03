@@ -87,10 +87,7 @@ impl S3Output for GetObjectOutput {
             res.set_optional_header(X_AMZ_EXPIRATION, self.expiration)?;
             res.set_optional_header(X_AMZ_RESTORE, self.restore)?;
 
-            res.set_optional_header(
-                LAST_MODIFIED,
-                time::map_opt_rfc3339_to_last_modified(self.last_modified.as_deref())?,
-            )?;
+            res.set_optional_header(LAST_MODIFIED, self.last_modified)?;
 
             res.set_optional_header(CONTENT_LENGTH, self.content_length.map(|l| l.to_string()))?;
 
