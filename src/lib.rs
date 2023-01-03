@@ -148,13 +148,13 @@ pub mod path;
 pub mod storages;
 
 /// Request type
-pub(crate) type Request = hyper::Request<Body>;
+pub type Request = hyper::Request<Body>;
 
 /// Response type
-pub(crate) type Response = hyper::Response<Body>;
+pub type Response = hyper::Response<Body>;
 
 /// `Box<dyn std::error::Error + Send + Sync + 'static>`
-pub(crate) type BoxStdError = Box<dyn std::error::Error + Send + Sync + 'static>;
+pub type BoxStdError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 pub(crate) use async_trait::async_trait;
 pub(crate) use hyper::{Body, Method, StatusCode};
