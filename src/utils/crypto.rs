@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 
 /// convert bytes to hex string
 pub fn to_hex_string(src: impl AsRef<[u8]>) -> String {
-    hex_simd::encode_to_boxed_str(src.as_ref(), hex_simd::AsciiCase::Lower).into()
+    hex_simd::encode_to_string(src.as_ref(), hex_simd::AsciiCase::Lower)
 }
 
 /// verify sha256 checksum string

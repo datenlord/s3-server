@@ -35,7 +35,7 @@ chrono = "0.4.19"
 const-str = { version = "0.3.1", features = ["verify-regex"] }
 dotenv = { version = "0.15.0", optional = true }
 futures = "0.3.21"
-hex-simd = "0.5.0"
+hex-simd = "0.8.0"
 hmac = "0.12.1"
 http = "0.2.7"
 httparse = "1.7.0"
