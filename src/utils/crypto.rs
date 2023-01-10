@@ -59,13 +59,5 @@ pub fn hex_hmac_sha256(key: &[u8], data: &[u8]) -> String {
 
 /// is base64 encoded
 pub fn is_base64_encoded(bytes: &[u8]) -> bool {
-    if bytes.len().wrapping_rem(4) != 0 {
-        return false;
-    }
-
-    // TODO: benchmark which is faster
-    // + base64::decode_config_buf
-    // + use lookup table, check `=` and length
-    let mut buf = Vec::new();
-    base64::decode_config_buf(bytes, base64::STANDARD, &mut buf).is_ok()
+    base64_simd::STANDARD.check(bytes).is_ok()
 }

@@ -75,7 +75,7 @@ impl FileSystem {
 
     /// resolve metadata path under the virtual root (custom format)
     fn get_metadata_path(&self, bucket: &str, key: &str) -> io::Result<PathBuf> {
-        let encode = |s: &str| base64::encode_config(s, base64::URL_SAFE_NO_PAD);
+        let encode = |s: &str| base64_simd::URL_SAFE_NO_PAD.encode_to_string(s);
 
         let file_path_str = format!(
             ".bucket-{}.object-{}.metadata.json",
