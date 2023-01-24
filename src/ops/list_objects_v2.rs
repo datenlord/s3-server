@@ -100,7 +100,7 @@ impl S3Output for ListObjectsV2Output {
                         })
                     })?;
                     w.opt_element("EncodingType", self.encoding_type)?;
-                    w.opt_element("KeyCount", self.max_keys.map(|k| k.to_string()))?;
+                    w.opt_element("KeyCount", self.key_count.map(|k| k.to_string()))?;
                     w.opt_element("ContinuationToken", self.continuation_token)?;
                     w.opt_element("NextContinuationToken", self.next_continuation_token)?;
                     w.opt_element("StartAfter", self.start_after)?;
