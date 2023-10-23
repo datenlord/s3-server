@@ -27,7 +27,7 @@ required-features = ["binary"]
 
 [dependencies]
 anyhow = { version = "1.0.57", optional = true }
-async-fs = "1.5.0"
+async-fs = "2.0.0"
 async-trait = "0.1.53"
 backtrace = "0.3.65"
 base64-simd = "0.8.0"
